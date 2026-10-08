@@ -49,7 +49,9 @@ public:
 
     // Testing / demo cycle
     void CycleDemoScenario();
+    void TriggerTestScenario(int index);
     void FireTransient(EventType type);
+    void RefreshVisibility();
 
 private:
     Overlay::IslandWindow* m_window = nullptr;
@@ -66,6 +68,7 @@ private:
     bool m_timerActive = false;
     bool m_micActive = false;
     int m_demoIndex = 0;
+    std::wstring m_lastTrackTitle;
 
     void PumpNextEvent();
     EventType ResolveCurrentLiveActivity() const;

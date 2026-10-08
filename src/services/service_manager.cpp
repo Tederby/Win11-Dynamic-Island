@@ -47,7 +47,12 @@ void ServiceManager::SetLiveActivity(EventType type, bool active) {
             m_window->SetCurrentEvent(current);
             m_window->SetState(IslandState::Compact);
         } else {
-            m_window->SetState(IslandState::Hidden);
+            if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
+                m_window->SetCurrentEvent(EventType::None);
+                m_window->SetState(IslandState::Compact);
+            } else {
+                m_window->SetState(IslandState::Hidden);
+            }
         }
     }
 }
@@ -61,7 +66,12 @@ void ServiceManager::PumpNextEvent() {
                 m_window->SetCurrentEvent(live);
                 m_window->SetState(IslandState::Compact);
             } else {
-                m_window->SetState(IslandState::Hidden);
+                if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
+                    m_window->SetCurrentEvent(EventType::None);
+                    m_window->SetState(IslandState::Compact);
+                } else {
+                    m_window->SetState(IslandState::Hidden);
+                }
             }
         }
         return;
@@ -95,8 +105,24 @@ void ServiceManager::Update() {
 }
 
 void ServiceManager::UpdateMediaState(const MediaState& state) {
+    bool trackChanged = (m_lastTrackTitle != state.title);
+    m_lastTrackTitle = state.title;
+
     if (m_window) {
         m_window->UpdateMediaState(state);
+    }
+
+    if (g_settings.mediaVisibilityPolicy == MediaVisibilityPolicy::TrackChangeOnly) {
+        if (trackChanged && state.isPlaying && !state.title.empty()) {
+            QueuedEvent qe;
+            qe.type = EventType::Media;
+            qe.durationMs = 3500;
+            qe.title = state.title;
+            qe.subtitle = state.artist;
+            PostTransientEvent(qe);
+        }
+    } else {
+        SetLiveActivity(EventType::Media, state.isPlaying);
     }
 }
 
@@ -202,8 +228,16 @@ void ServiceManager::FireTransient(EventType type) {
     PostTransientEvent(qe);
 }
 
-void ServiceManager::CycleDemoScenario() {
-    m_demoIndex = (m_demoIndex + 1) % 9;
+void ServiceManager::TriggerTestScenario(int index) {
+    if (index >= 0 && index < 9) {
+        m_demoIndex = index;
+    } else {
+        m_demoIndex = (m_demoIndex + 1) % 9;
+    }
+
+    m_transientQueue.clear();
+    m_hasActiveTransient = false;
+
     switch (m_demoIndex) {
         case 0:
             m_timerActive = false;
@@ -241,6 +275,27 @@ void ServiceManager::CycleDemoScenario() {
         case 8:
             FireTransient(EventType::TimerDone);
             break;
+    }
+}
+
+void ServiceManager::CycleDemoScenario() {
+    TriggerTestScenario(9);
+}
+
+void ServiceManager::RefreshVisibility() {
+    if (!m_hasActiveTransient && m_window) {
+        EventType current = ResolveCurrentLiveActivity();
+        if (current != EventType::None) {
+            m_window->SetCurrentEvent(current);
+            m_window->SetState(IslandState::Compact);
+        } else {
+            if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
+                m_window->SetCurrentEvent(EventType::None);
+                m_window->SetState(IslandState::Compact);
+            } else {
+                m_window->SetState(IslandState::Hidden);
+            }
+        }
     }
 }
 

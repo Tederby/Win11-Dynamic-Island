@@ -2,16 +2,14 @@
 
 #include <windows.h>
 #include <string>
-#include <vector>
 #include <memory>
-#include <cstdint>
 
 // Fallback declarations for syntax checking outside Windhawk environment
-#ifndef Wh_Log
-extern "C" void Wh_Log(const wchar_t* format, ...);
-inline const wchar_t* Wh_GetStringSetting(const wchar_t* name, ...) { return nullptr; }
-inline void Wh_FreeStringSetting(const wchar_t* string) {}
-inline int Wh_GetIntSetting(const wchar_t* name, ...) { return 0; }
+#ifndef WH_MOD
+inline void Wh_Log(const wchar_t* format, ...) { (void)format; }
+inline const wchar_t* Wh_GetStringSetting(const wchar_t* name, ...) { (void)name; return nullptr; }
+inline void Wh_FreeStringSetting(const wchar_t* string) { (void)string; }
+inline int Wh_GetIntSetting(const wchar_t* name, ...) { (void)name; return 0; }
 #endif
 
 namespace DynamicIsland {
@@ -30,6 +28,18 @@ enum class PlacementMode {
     Auto,
     TopEmbed,
     Floating
+};
+
+// Idle visibility mode preference
+enum class IdleVisibilityMode {
+    AlwaysVisible,
+    EventsOnly
+};
+
+// Media playback visibility policy
+enum class MediaVisibilityPolicy {
+    AlwaysVisible,
+    TrackChangeOnly
 };
 
 // Island visual layout state
@@ -96,6 +106,8 @@ struct TransientState {
 // Configuration settings container
 struct ModSettings {
     PlacementMode placement = PlacementMode::Auto;
+    IdleVisibilityMode idleVisibilityMode = IdleVisibilityMode::AlwaysVisible;
+    MediaVisibilityPolicy mediaVisibilityPolicy = MediaVisibilityPolicy::AlwaysVisible;
     bool enableMedia = true;
     bool enableTimer = true;
     bool enableMicStatus = true;
@@ -103,6 +115,7 @@ struct ModSettings {
     bool enableCapsLockHUD = true;
     bool enablePowerHUD = true;
     bool enableBluetoothHUD = true;
+    bool enableDebugHotkeys = true;
     int autoCollapseSeconds = 5;
     float animationSpeed = 1.0f;
 };
@@ -112,15 +125,15 @@ extern ModSettings g_settings;
 
 // Theme color definitions (ARGB / hex)
 namespace Colors {
-    constexpr COLORREF BACKGROUND_DARK       = RGB(11, 11, 13);
-    constexpr COLORREF EMBEDDED_DARK         = RGB(30, 31, 36);
-    constexpr COLORREF ACCENT_BLUE           = RGB(47, 107, 255);
-    constexpr COLORREF ACCENT_GREEN          = RGB(48, 209, 88);
-    constexpr COLORREF ACCENT_ORANGE         = RGB(255, 159, 10);
-    constexpr COLORREF ACCENT_RED            = RGB(255, 69, 58);
-    constexpr COLORREF TEXT_PRIMARY          = RGB(255, 255, 255);
-    constexpr COLORREF TEXT_MUTED            = RGB(168, 171, 181);
-    constexpr COLORREF BORDER_COLOR          = RGB(44, 47, 55);
+    inline constexpr COLORREF BACKGROUND_DARK       = RGB(11, 11, 13);
+    inline constexpr COLORREF EMBEDDED_DARK         = RGB(30, 31, 36);
+    inline constexpr COLORREF ACCENT_BLUE           = RGB(47, 107, 255);
+    inline constexpr COLORREF ACCENT_GREEN          = RGB(48, 209, 88);
+    inline constexpr COLORREF ACCENT_ORANGE         = RGB(255, 159, 10);
+    inline constexpr COLORREF ACCENT_RED            = RGB(255, 69, 58);
+    inline constexpr COLORREF TEXT_PRIMARY          = RGB(255, 255, 255);
+    inline constexpr COLORREF TEXT_MUTED            = RGB(168, 171, 181);
+    inline constexpr COLORREF BORDER_COLOR          = RGB(44, 47, 55);
 }
 
 } // namespace DynamicIsland

@@ -44,7 +44,6 @@ TaskbarInfo QueryPrimaryTaskbar() {
     }
 
     // 3. Robust geometric edge detection (immune to SHAppBarMessage reporting errors)
-    int tbHeight = info.taskbarRect.bottom - info.taskbarRect.top;
     int monHeight = info.monitorRect.bottom - info.monitorRect.top;
 
     if (info.taskbarRect.top <= info.monitorRect.top + 10 && info.taskbarRect.bottom < info.monitorRect.bottom - (monHeight / 2)) {

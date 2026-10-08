@@ -49,7 +49,7 @@ This document describes the architectural layout, rendering pipeline, animation 
 ### 2.1 Window Topology
 The Dynamic Island UI is hosted within a top-level layered popup window:
 - **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED`.
-- **Transparency**: Uses `SetLayeredWindowAttributes` with colorkey and alpha compositing, allowing smooth anti-aliased rounded corners and semi-transparent backgrounds without window borders.
+- **Transparency & Clipping**: Uses `SetLayeredWindowAttributes` with `LWA_ALPHA` and dynamic OS-level squircle region clipping (`SetWindowRgn` with `CreateRoundRectRgn`), completely eliminating colorkey halos, black cutout artifacts, and rectangular window borders.
 - **Hit-Testing & Controls**:
   - Compact state: Click expands the island into full activity mode.
   - Expanded state:
@@ -57,10 +57,12 @@ The Dynamic Island UI is hosted within a top-level layered popup window:
     - Timer Controls: Pause/Resume (`Jeda`/`Lanjut`) and Stop buttons.
     - Non-button click: Collapses back to compact state.
   - Right-Click: Cycles through all 9 live and transient scenarios for rapid testing and visual verification.
+  - Global Hotkeys: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>1..9, 0</kbd> simulates Media, Timer, Mic, Volume, CapsLock, Power, Bluetooth, Low Battery, Timer Done, and scenario cycling.
   - Hover Tracking: Pauses the 5-second auto-collapse timer while hovered.
 
 ### 2.2 Direct2D / DirectWrite Rendering
 - **Factory Creation**: Single-threaded `ID2D1Factory` and shared `IDWriteFactory`.
+- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and `CreateEllipsisTrimmingSign` character ellipsis trimming to prevent text clipping and multi-line wrapping collisions.
 - **Render Target**: `ID2D1HwndRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
 - **Draw Call Cycle**:
   1. `BeginDraw()`
@@ -151,3 +153,9 @@ Because Windhawk expects a single monolithic compilation unit (`.wh.cpp`), we us
 7. **`scripts/bundle.py`**: Reads `src/main.cpp`, recursively inlines internal `#include` trees, de-duplicates system `#include <...>` headers to the top, and emits `win11-dynamic-island.wh.cpp`.
 
 This allows standard C++ modern modular practices during development while retaining 100% compatibility with Windhawk's single-file distribution model.
+
+### 6.1 Windhawk Compiler & Linker Protocol
+- **Linker Libraries (`@compilerOptions`)**: Mod metadata in `src/metadata/mod_header.h` must declare all required Win32 import libraries: `-ld2d1 -ldwrite -lwindowscodecs -luxtheme -lole32 -lshcore -lversion -lgdi32`. Specifically, GDI region clipping APIs (`CreateRoundRectRgn`, `SetWindowRgn`) require `-lgdi32`.
+- **Windhawk API Fallback Guard (`WH_MOD`)**: The Windhawk engine pre-includes `windhawk_api.h` and defines `WH_MOD`. All mock/fallback declarations in `src/common/defs.h` (`Wh_Log`, `Wh_Get*Setting`) must be strictly guarded with `#ifndef WH_MOD` to prevent language linkage conflicts and redefinition errors.
+- **C++17 Inline Variables**: Global constants in headers (colors, SVG icon paths) must use `inline constexpr` to prevent Clang `-Wunused-const-variable` warnings across compilation units.
+

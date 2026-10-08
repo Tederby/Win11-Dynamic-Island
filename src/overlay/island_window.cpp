@@ -42,7 +42,17 @@ bool IslandWindow::Create() {
         return false;
     }
 
-    SetLayeredWindowAttributes(m_hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY | LWA_ALPHA);
+    m_cachedTaskbar = Platform::QueryPrimaryTaskbar();
+    m_taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
+
+    // Pure alpha layered window attributes (no colorkey halo or transparent cutout holes)
+    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
+
+    // Initial squircle clipping
+    HRGN initRgn = CreateRoundRectRgn(0, 0, 401, 201, 33, 33);
+    if (initRgn) {
+        SetWindowRgn(m_hwnd, initRgn, TRUE);
+    }
 
     if (!m_renderer->Initialize(m_hwnd)) {
         LogError(L"Failed to initialize D2D renderer for island window");
@@ -52,19 +62,75 @@ bool IslandWindow::Create() {
     // Timer for equalizer wave and marquee animation ticks
     SetTimer(m_hwnd, m_waveTimerId, 40, nullptr);
 
+    // Periodic timer for taskbar geometry polling (every 500ms)
+    SetTimer(m_hwnd, m_geometryCheckTimerId, 500, nullptr);
+
+    if (g_settings.enableDebugHotkeys) {
+        RegisterHotkeys();
+    }
+
     LogInfo(L"Dynamic Island overlay window created successfully");
     return true;
 }
 
 void IslandWindow::Destroy() {
+    UnregisterHotkeys();
     if (m_hwnd) {
         KillTimer(m_hwnd, m_autoCollapseTimerId);
         KillTimer(m_hwnd, m_animTimerId);
         KillTimer(m_hwnd, m_waveTimerId);
+        KillTimer(m_hwnd, m_geometryCheckTimerId);
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
     }
     UnregisterClassW(WINDOW_CLASS_NAME, GetModuleHandleW(nullptr));
+}
+
+static constexpr int HOTKEY_ID_BASE = 5100;
+
+void IslandWindow::RegisterHotkeys() {
+    if (!m_hwnd || m_hotkeysRegistered) return;
+    for (int i = 0; i <= 9; ++i) {
+        UINT vk = (i == 9) ? '0' : static_cast<UINT>('1' + i);
+        RegisterHotKey(m_hwnd, HOTKEY_ID_BASE + i, MOD_CONTROL | MOD_WIN, vk);
+    }
+    m_hotkeysRegistered = true;
+    LogInfo(L"Global test hotkeys registered (Ctrl+Win+1..9, 0)");
+}
+
+void IslandWindow::UnregisterHotkeys() {
+    if (!m_hwnd || !m_hotkeysRegistered) return;
+    for (int i = 0; i <= 9; ++i) {
+        UnregisterHotKey(m_hwnd, HOTKEY_ID_BASE + i);
+    }
+    m_hotkeysRegistered = false;
+}
+
+void IslandWindow::OnTaskbarOrDisplayChanged() {
+    Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
+    m_cachedTaskbar = tb;
+    UpdateDimensions();
+    TriggerAnimationUpdate();
+}
+
+void IslandWindow::CheckTaskbarGeometry() {
+    Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
+    bool changed = (tb.position != m_cachedTaskbar.position) ||
+                   (tb.isAutoHide != m_cachedTaskbar.isAutoHide) ||
+                   (tb.taskbarRect.left != m_cachedTaskbar.taskbarRect.left) ||
+                   (tb.taskbarRect.top != m_cachedTaskbar.taskbarRect.top) ||
+                   (tb.taskbarRect.right != m_cachedTaskbar.taskbarRect.right) ||
+                   (tb.taskbarRect.bottom != m_cachedTaskbar.taskbarRect.bottom) ||
+                   (tb.workAreaRect.left != m_cachedTaskbar.workAreaRect.left) ||
+                   (tb.workAreaRect.top != m_cachedTaskbar.workAreaRect.top) ||
+                   (tb.workAreaRect.right != m_cachedTaskbar.workAreaRect.right) ||
+                   (tb.workAreaRect.bottom != m_cachedTaskbar.workAreaRect.bottom);
+
+    if (changed) {
+        LogInfo(L"Detected real-time taskbar geometry change, adapting island position");
+        m_cachedTaskbar = tb;
+        UpdateDimensions();
+    }
 }
 
 void IslandWindow::Show(bool show) {
@@ -153,7 +219,7 @@ void IslandWindow::TriggerAnimationUpdate() {
             if (m_state == IslandState::Expanded) {
                 curY = static_cast<float>(topAnchor + 3);
             } else {
-                curY = static_cast<float>(topAnchor + (tbHeight - static_cast<int>(curH)) / 2);
+                curY = static_cast<float>(topAnchor) + (static_cast<float>(tbHeight) - curH) / 2.0f;
             }
         } else {
             // Anchor at bottom, expand upwards
@@ -176,6 +242,26 @@ void IslandWindow::TriggerAnimationUpdate() {
             SWP_NOACTIVATE | SWP_NOZORDER
         );
         m_renderer->Resize(static_cast<UINT>(curW), static_cast<UINT>(curH));
+
+        // Dynamically clip window to squircle capsule (eliminates rectangular artifacts)
+        float curR = m_animRadius.GetValue();
+        float curO = m_animOpacity.GetValue();
+
+        int rgnW = static_cast<int>(curW) + 1;
+        int rgnH = static_cast<int>(curH) + 1;
+        int rgnDiameter = static_cast<int>(curR * 2.0f);
+        if (rgnDiameter > rgnH) rgnDiameter = rgnH;
+        if (rgnDiameter > rgnW) rgnDiameter = rgnW;
+        if (rgnDiameter < 2) rgnDiameter = 2;
+
+        HRGN rgn = CreateRoundRectRgn(0, 0, rgnW, rgnH, rgnDiameter, rgnDiameter);
+        if (rgn) {
+            SetWindowRgn(m_hwnd, rgn, TRUE);
+        }
+
+        // Apply smooth window opacity
+        BYTE alpha = static_cast<BYTE>(curO * 255.0f);
+        SetLayeredWindowAttributes(m_hwnd, 0, alpha, LWA_ALPHA);
     }
 
     Render();
@@ -257,9 +343,6 @@ void IslandWindow::Render() {
     float r = m_animRadius.GetValue();
 
     if (w > 0.0f && h > 0.0f) {
-        Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
-        bool isTop = (tb.position == TaskbarPosition::Top);
-
         D2D1_ROUNDED_RECT pill = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, w, h), r, r);
 
         // Solid dark background and subtle border for clear visibility on top/bottom taskbars
@@ -620,7 +703,27 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
+    if (self->m_taskbarCreatedMsg != 0 && msg == self->m_taskbarCreatedMsg) {
+        LogInfo(L"TaskbarCreated window message received, adapting island window");
+        self->OnTaskbarOrDisplayChanged();
+        return 0;
+    }
+
     switch (msg) {
+        case WM_HOTKEY: {
+            int hotkeyIdx = static_cast<int>(wParam) - HOTKEY_ID_BASE;
+            if (self->m_serviceManager && hotkeyIdx >= 0 && hotkeyIdx <= 9) {
+                self->m_serviceManager->TriggerTestScenario(hotkeyIdx);
+            }
+            return 0;
+        }
+
+        case WM_SETTINGCHANGE:
+        case WM_DISPLAYCHANGE:
+        case WM_DPICHANGED:
+            self->OnTaskbarOrDisplayChanged();
+            return 0;
+
         case WM_TIMER:
             if (wParam == self->m_animTimerId) {
                 self->TriggerAnimationUpdate();
@@ -634,6 +737,8 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 if (self->m_state != IslandState::Hidden) {
                     self->Render();
                 }
+            } else if (wParam == self->m_geometryCheckTimerId) {
+                self->CheckTaskbarGeometry();
             }
             return 0;
 

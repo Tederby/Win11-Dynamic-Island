@@ -64,6 +64,26 @@ void LoadSettings() {
         Wh_FreeStringSetting(placementStr);
     }
 
+    PCWSTR idleVisStr = Wh_GetStringSetting(L"idleVisibilityMode");
+    if (idleVisStr) {
+        if (wcscmp(idleVisStr, L"events_only") == 0) {
+            g_settings.idleVisibilityMode = IdleVisibilityMode::EventsOnly;
+        } else {
+            g_settings.idleVisibilityMode = IdleVisibilityMode::AlwaysVisible;
+        }
+        Wh_FreeStringSetting(idleVisStr);
+    }
+
+    PCWSTR mediaVisStr = Wh_GetStringSetting(L"mediaVisibilityPolicy");
+    if (mediaVisStr) {
+        if (wcscmp(mediaVisStr, L"track_change_only") == 0) {
+            g_settings.mediaVisibilityPolicy = MediaVisibilityPolicy::TrackChangeOnly;
+        } else {
+            g_settings.mediaVisibilityPolicy = MediaVisibilityPolicy::AlwaysVisible;
+        }
+        Wh_FreeStringSetting(mediaVisStr);
+    }
+
     g_settings.enableMedia = Wh_GetIntSetting(L"enableMedia") != 0;
     g_settings.enableTimer = Wh_GetIntSetting(L"enableTimer") != 0;
     g_settings.enableMicStatus = Wh_GetIntSetting(L"enableMicStatus") != 0;
@@ -71,6 +91,7 @@ void LoadSettings() {
     g_settings.enableCapsLockHUD = Wh_GetIntSetting(L"enableCapsLockHUD") != 0;
     g_settings.enablePowerHUD = Wh_GetIntSetting(L"enablePowerHUD") != 0;
     g_settings.enableBluetoothHUD = Wh_GetIntSetting(L"enableBluetoothHUD") != 0;
+    g_settings.enableDebugHotkeys = Wh_GetIntSetting(L"enableDebugHotkeys") != 0;
     g_settings.autoCollapseSeconds = Wh_GetIntSetting(L"autoCollapseSeconds");
     if (g_settings.autoCollapseSeconds <= 0) {
         g_settings.autoCollapseSeconds = 5;
@@ -135,6 +156,19 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
             }
 
             if (g_serviceManager) g_serviceManager->Update();
+            continue;
+        }
+
+        if (msg.message == WM_USER + 101) {
+            if (g_serviceManager) g_serviceManager->RefreshVisibility();
+            if (g_islandWindow) {
+                if (g_settings.enableDebugHotkeys) {
+                    g_islandWindow->RegisterHotkeys();
+                } else {
+                    g_islandWindow->UnregisterHotkeys();
+                }
+                g_islandWindow->UpdateDimensions();
+            }
             continue;
         }
 
@@ -219,4 +253,7 @@ void Wh_ModUninit() {
 void Wh_ModSettingsChanged() {
     DynamicIsland::LogInfo(L"Settings updated");
     DynamicIsland::LoadSettings();
+    if (DynamicIsland::g_uiThreadId != 0) {
+        PostThreadMessageW(DynamicIsland::g_uiThreadId, WM_USER + 101, 0, 0);
+    }
 }

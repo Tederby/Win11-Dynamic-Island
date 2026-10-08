@@ -24,7 +24,7 @@ public:
     bool IsMicInUse() const { return m_isMicInUse; }
 
 private:
-    ServiceManager* m_manager = nullptr;
+    [[maybe_unused]] ServiceManager* m_manager = nullptr;
     float m_currentVolume = 0.5f;
     bool m_isMuted = false;
     bool m_isMicInUse = false;

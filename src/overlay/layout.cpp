@@ -92,7 +92,7 @@ IslandMetrics LayoutEngine::CalculateMetrics(
         if (state == IslandState::Expanded) {
             m.posY = static_cast<float>(topAnchor + 3);
         } else {
-            m.posY = static_cast<float>(topAnchor + (tbHeight - compactH) / 2);
+            m.posY = static_cast<float>(topAnchor) + static_cast<float>(tbHeight - compactH) / 2.0f;
         }
     } else {
         int bottomAnchor = tbInfo.workAreaRect.bottom;

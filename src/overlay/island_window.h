@@ -41,6 +41,11 @@ public:
     void TriggerAnimationUpdate();
     void Render();
 
+    void UpdateDimensions();
+    void OnTaskbarOrDisplayChanged();
+    void RegisterHotkeys();
+    void UnregisterHotkeys();
+
     HWND GetHwnd() const { return m_hwnd; }
     IslandState GetState() const { return m_state; }
     EventType GetCurrentEvent() const { return m_currentEvent; }
@@ -70,12 +75,17 @@ private:
     UINT_PTR m_autoCollapseTimerId = 1001;
     UINT_PTR m_animTimerId = 1002;
     UINT_PTR m_waveTimerId = 1003;
+    UINT_PTR m_geometryCheckTimerId = 1004;
+
+    Platform::TaskbarInfo m_cachedTaskbar;
+    UINT m_taskbarCreatedMsg = 0;
+    bool m_hotkeysRegistered = false;
 
     void ArmAutoCollapse();
     void DisarmAutoCollapse();
-    void UpdateDimensions();
     void OnClick(int x, int y);
     void OnRightClick();
+    void CheckTaskbarGeometry();
 };
 
 } // namespace Overlay

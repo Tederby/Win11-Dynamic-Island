@@ -78,6 +78,22 @@ bool D2DRenderer::Initialize(HWND hwnd) {
         );
     }
 
+    auto configureNoWrapAndEllipsis = [this](IDWriteTextFormat* format) {
+        if (!format || !m_dwriteFactory) return;
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        DWRITE_TRIMMING trimming{};
+        trimming.granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER;
+        ComPtr<IDWriteInlineObject> ellipsisSign;
+        if (SUCCEEDED(m_dwriteFactory->CreateEllipsisTrimmingSign(format, ellipsisSign.GetAddressOf()))) {
+            format->SetTrimming(&trimming, ellipsisSign.Get());
+        }
+    };
+
+    configureNoWrapAndEllipsis(m_textFormatRegular.Get());
+    configureNoWrapAndEllipsis(m_textFormatBold.Get());
+    configureNoWrapAndEllipsis(m_textFormatSmall.Get());
+    configureNoWrapAndEllipsis(m_textFormatBig.Get());
+
     return CreateDeviceResources();
 }
 
