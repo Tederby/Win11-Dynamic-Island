@@ -94,11 +94,12 @@ win11-dynamic-island/
 ├── scripts/
 │   └── bundle.py            # Python bundler that resolves modular code into .wh.cpp
 ├── prototype.html           # Interactive HTML/CSS reference prototype
+├── TODO.md                  # Project task board, roadmap, and backlog tracker
 ├── win11-dynamic-island.wh.cpp # Generated monolithic Windhawk mod (gitignored)
 └── package.json             # NPM convenience scripts
 ```
 
-For deeper technical details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For deeper technical details, see [ARCHITECTURE.md](ARCHITECTURE.md). Active developments, upcoming features, and task statuses are tracked in [TODO.md](TODO.md).
 
 ---
 
