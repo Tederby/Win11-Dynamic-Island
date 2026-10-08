@@ -27,12 +27,12 @@ This document describes the architectural layout, rendering pipeline, animation 
     +----------------+-----------------+   +--------------+--------------+
                      |                                    |
      +---------------+---------------+                    v
-     |                               |      +----------------------------+
-     v                               v      |       Layout Engine        |
+     |                               |           +-----------------------+
+     v                               v           |  Layout Engine        |
 +--------------------+     +------------------+  |  - Taskbar info & DPI |
 |   Live Activities  |     |  Transient HUDs  |  |  - Top embed vs float |
 |  - Media (GSMTC)   |     |  - Volume (MMDev)|  |  - Compact vs Expanded|
-|  - Focus Timer     |     |  - Caps Lock     |  +--------------+---------+
+|  - Focus Timer     |     |  - Caps Lock     |  +--------------+--------+
 |  - Microphone      |     |  - Power/Battery |                 |
 +--------------------+     |  - Bluetooth     |                 v
                            +------------------+  +----------------------------+
@@ -71,7 +71,7 @@ The Dynamic Island UI is hosted within a top-level layered popup window:
 
 ## 3. Animation Engine: Spring Physics & Easing
 
-In `Dynamic Island Win11 - preview.html`, fluid spring transitions are defined by:
+In [`prototype.html`](prototype.html), fluid spring transitions are defined by:
 ```css
 --spring: cubic-bezier(0.34, 1.3, 0.5, 1);
 ```

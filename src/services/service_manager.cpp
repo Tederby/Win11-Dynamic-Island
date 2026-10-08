@@ -81,7 +81,7 @@ void ServiceManager::Update() {
 }
 
 EventType ServiceManager::ResolveCurrentLiveActivity() const {
-    // Priority order matching preview.html: mic > timer > media
+    // Priority order matching prototype.html: mic > timer > media
     if (m_micActive)   return EventType::MicStatus;
     if (m_timerActive) return EventType::Timer;
     if (m_mediaActive) return EventType::Media;

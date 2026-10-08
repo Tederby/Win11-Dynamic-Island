@@ -15,6 +15,10 @@ dist/
 # Windhawk Dev & Local Caches
 .windhawk/
 *.wh.user
+*.wh.cpp
+
+# Local Agent Workspace Customizations
+.agents/
 
 # Python
 __pycache__/

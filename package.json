@@ -6,7 +6,8 @@
   "scripts": {
     "bundle": "python scripts/bundle.py",
     "bundle:watch": "python scripts/bundle.py --watch",
-    "test:preview": "start \"\" \"Dynamic Island Win11 - preview.html\""
+    "test:preview": "start \"\" \"prototype.html\"",
+    "prototype": "start \"\" \"prototype.html\""
   },
   "repository": {
     "type": "git",
