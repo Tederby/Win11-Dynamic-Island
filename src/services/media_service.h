@@ -2,18 +2,12 @@
 
 #include <windows.h>
 #include <string>
+#include "../common/defs.h"
 
 namespace DynamicIsland {
 namespace Services {
 
 class ServiceManager;
-
-struct MediaState {
-    std::wstring title;
-    std::wstring artist;
-    bool isPlaying = false;
-    float progress = 0.0f;
-};
 
 class MediaService {
 public:

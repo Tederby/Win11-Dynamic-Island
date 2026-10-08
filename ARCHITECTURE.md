@@ -50,7 +50,14 @@ This document describes the architectural layout, rendering pipeline, animation 
 The Dynamic Island UI is hosted within a top-level layered popup window:
 - **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED`.
 - **Transparency**: Uses `SetLayeredWindowAttributes` with colorkey and alpha compositing, allowing smooth anti-aliased rounded corners and semi-transparent backgrounds without window borders.
-- **Hit-Testing**: The window responds to clicks, hover transitions, and dispatches collapse/expand commands.
+- **Hit-Testing & Controls**:
+  - Compact state: Click expands the island into full activity mode.
+  - Expanded state:
+    - Media Controls: Previous, Play/Pause, and Next buttons with interactive hit-testing.
+    - Timer Controls: Pause/Resume (`Jeda`/`Lanjut`) and Stop buttons.
+    - Non-button click: Collapses back to compact state.
+  - Right-Click: Cycles through all 9 live and transient scenarios for rapid testing and visual verification.
+  - Hover Tracking: Pauses the 5-second auto-collapse timer while hovered.
 
 ### 2.2 Direct2D / DirectWrite Rendering
 - **Factory Creation**: Single-threaded `ID2D1Factory` and shared `IDWriteFactory`.

@@ -54,6 +54,30 @@ bool D2DRenderer::Initialize(HWND hwnd) {
         );
     }
 
+    if (m_dwriteFactory) {
+        m_dwriteFactory->CreateTextFormat(
+            L"Segoe UI Variable",
+            nullptr,
+            DWRITE_FONT_WEIGHT_SEMI_BOLD,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            32.0f,
+            L"en-US",
+            m_textFormatBig.GetAddressOf()
+        );
+
+        m_dwriteFactory->CreateTextFormat(
+            L"Segoe UI Variable",
+            nullptr,
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            11.0f,
+            L"en-US",
+            m_textFormatSmall.GetAddressOf()
+        );
+    }
+
     return CreateDeviceResources();
 }
 
@@ -101,6 +125,8 @@ void D2DRenderer::DiscardDeviceResources() {
 
 void D2DRenderer::Cleanup() {
     DiscardDeviceResources();
+    m_textFormatSmall.Reset();
+    m_textFormatBig.Reset();
     m_textFormatBold.Reset();
     m_textFormatRegular.Reset();
     m_dwriteFactory.Reset();
@@ -225,6 +251,96 @@ void D2DRenderer::DrawEqualizerWaves(D2D1_POINT_2F origin, float height, float p
         );
         m_renderTarget->FillRectangle(r, m_solidBrush.Get());
     }
+}
+
+void D2DRenderer::DrawBigText(const std::wstring& text, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    if (!m_renderTarget || !m_solidBrush) return;
+    IDWriteTextFormat* format = m_textFormatBig.Get() ? m_textFormatBig.Get() : m_textFormatBold.Get();
+    if (!format) return;
+
+    m_solidBrush->SetColor(color);
+    m_renderTarget->DrawText(
+        text.c_str(),
+        static_cast<UINT32>(text.length()),
+        format,
+        rect,
+        m_solidBrush.Get()
+    );
+}
+
+void D2DRenderer::DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius) {
+    if (!m_renderTarget) return;
+
+    D2D1_GRADIENT_STOP stops[2];
+    stops[0].position = 0.0f;
+    stops[0].color = D2D1::ColorF(1.0f, 0.478f, 0.722f, 1.0f); // #ff7ab8
+    stops[1].position = 1.0f;
+    stops[1].color = D2D1::ColorF(0.416f, 0.361f, 1.0f, 1.0f);   // #6a5cff
+
+    ComPtr<ID2D1GradientStopCollection> stopCollection;
+    if (SUCCEEDED(m_renderTarget->CreateGradientStopCollection(stops, 2, stopCollection.GetAddressOf()))) {
+        ComPtr<ID2D1LinearGradientBrush> gradBrush;
+        D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES gradProps = D2D1::LinearGradientBrushProperties(
+            D2D1::Point2F(bounds.left, bounds.top),
+            D2D1::Point2F(bounds.right, bounds.bottom)
+        );
+        if (SUCCEEDED(m_renderTarget->CreateLinearGradientBrush(gradProps, stopCollection.Get(), gradBrush.GetAddressOf()))) {
+            D2D1_ROUNDED_RECT r = D2D1::RoundedRect(bounds, cornerRadius, cornerRadius);
+            m_renderTarget->FillRoundedRectangle(r, gradBrush.Get());
+        }
+    }
+}
+
+void D2DRenderer::DrawIconImage(IconType type, const D2D1_RECT_F& bounds, D2D1_COLOR_F color) {
+    if (!m_renderTarget || !m_d2dFactory || !m_solidBrush) return;
+    DrawIcon(m_renderTarget.Get(), m_d2dFactory.Get(), m_solidBrush.Get(), type, bounds, color);
+}
+
+void D2DRenderer::DrawButtonPill(const D2D1_RECT_F& bounds, const std::wstring& text, bool isHovered) {
+    if (!m_renderTarget || !m_solidBrush) return;
+    float radius = (bounds.bottom - bounds.top) / 2.0f;
+    D2D1_ROUNDED_RECT pill = D2D1::RoundedRect(bounds, radius, radius);
+
+    if (isHovered) {
+        m_solidBrush->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.15f));
+        m_renderTarget->FillRoundedRectangle(pill, m_solidBrush.Get());
+    }
+
+    m_solidBrush->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.25f));
+    m_renderTarget->DrawRoundedRectangle(pill, m_solidBrush.Get(), 1.0f);
+
+    m_solidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::White));
+    IDWriteTextFormat* format = m_textFormatRegular.Get();
+    if (format) {
+        format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        m_renderTarget->DrawText(text.c_str(), static_cast<UINT32>(text.length()), format, bounds, m_solidBrush.Get());
+        format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    }
+}
+
+void D2DRenderer::DrawCircularButton(const D2D1_RECT_F& bounds, IconType icon, bool isHovered) {
+    if (!m_renderTarget || !m_solidBrush) return;
+    float w = bounds.right - bounds.left;
+    float h = bounds.bottom - bounds.top;
+    D2D1_POINT_2F center = D2D1::Point2F(bounds.left + w / 2.0f, bounds.top + h / 2.0f);
+    float radius = (w < h ? w : h) / 2.0f;
+
+    if (isHovered) {
+        m_solidBrush->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.15f));
+        m_renderTarget->FillEllipse(D2D1::Ellipse(center, radius, radius), m_solidBrush.Get());
+    }
+
+    // Centered icon inside button (icon size 14x14)
+    float iconSize = 14.0f;
+    D2D1_RECT_F iconBounds = D2D1::RectF(
+        center.x - iconSize / 2.0f,
+        center.y - iconSize / 2.0f,
+        center.x + iconSize / 2.0f,
+        center.y + iconSize / 2.0f
+    );
+    DrawIconImage(icon, iconBounds, D2D1::ColorF(D2D1::ColorF::White));
 }
 
 } // namespace Graphics

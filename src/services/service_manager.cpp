@@ -1,11 +1,17 @@
 #include "service_manager.h"
+#include "media_service.h"
+#include "timer_service.h"
 #include "../common/log.h"
 
 namespace DynamicIsland {
 namespace Services {
 
 ServiceManager::ServiceManager(Overlay::IslandWindow* window)
-    : m_window(window) {}
+    : m_window(window) {
+    if (m_window) {
+        m_window->SetServiceManager(this);
+    }
+}
 
 ServiceManager::~ServiceManager() {
     Shutdown();
@@ -67,6 +73,14 @@ void ServiceManager::PumpNextEvent() {
     m_transientExpiryTick = GetTickCount() + m_currentTransient.durationMs;
 
     if (m_window) {
+        TransientState ts;
+        ts.type = m_currentTransient.type;
+        ts.title = m_currentTransient.title;
+        ts.subtitle = m_currentTransient.subtitle;
+        ts.value = m_currentTransient.progressPercent;
+        ts.progressFraction = static_cast<float>(m_currentTransient.progressPercent) / 100.0f;
+
+        m_window->UpdateTransientState(ts);
         m_window->SetCurrentEvent(m_currentTransient.type);
         m_window->SetState(IslandState::Compact);
     }
@@ -77,6 +91,156 @@ void ServiceManager::Update() {
         if (GetTickCount() >= m_transientExpiryTick) {
             PumpNextEvent();
         }
+    }
+}
+
+void ServiceManager::UpdateMediaState(const MediaState& state) {
+    if (m_window) {
+        m_window->UpdateMediaState(state);
+    }
+}
+
+void ServiceManager::UpdateTimerState(const TimerState& state) {
+    if (m_window) {
+        m_window->UpdateTimerState(state);
+    }
+}
+
+void ServiceManager::OnMediaPlayPause() {
+    if (m_mediaService) {
+        if (m_mediaService->GetState().isPlaying) {
+            m_mediaService->Pause();
+        } else {
+            m_mediaService->Play();
+        }
+    }
+    if (m_window) {
+        m_window->GetMediaState().isPlaying = !m_window->GetMediaState().isPlaying;
+        m_window->Render();
+    }
+}
+
+void ServiceManager::OnMediaPrev() {
+    if (m_mediaService) {
+        m_mediaService->Previous();
+    }
+    if (m_window) {
+        m_window->GetMediaState().progress = 0.0f;
+        m_window->Render();
+    }
+}
+
+void ServiceManager::OnMediaNext() {
+    if (m_mediaService) {
+        m_mediaService->Next();
+    }
+    if (m_window) {
+        m_window->GetMediaState().progress = 0.0f;
+        m_window->Render();
+    }
+}
+
+void ServiceManager::OnTimerTogglePause() {
+    if (m_timerService) {
+        if (m_timerService->IsPaused()) {
+            m_timerService->Resume();
+        } else {
+            m_timerService->Pause();
+        }
+    }
+    if (m_window) {
+        m_window->GetTimerState().isPaused = !m_window->GetTimerState().isPaused;
+        m_window->Render();
+    }
+}
+
+void ServiceManager::OnTimerStop() {
+    if (m_timerService) {
+        m_timerService->Stop();
+    }
+    SetLiveActivity(EventType::Timer, false);
+}
+
+void ServiceManager::FireTransient(EventType type) {
+    QueuedEvent qe;
+    qe.type = type;
+
+    switch (type) {
+        case EventType::Volume:
+            qe.durationMs = DURATION_VOLUME_MS;
+            qe.title = L"Volume";
+            qe.progressPercent = 68;
+            break;
+        case EventType::CapsLock:
+            qe.durationMs = DURATION_CAPS_LOCK_MS;
+            qe.title = L"Caps Lock";
+            qe.subtitle = L"ON";
+            break;
+        case EventType::Power:
+            qe.durationMs = DURATION_POWER_MS;
+            qe.title = L"Mengisi daya";
+            qe.progressPercent = 62;
+            break;
+        case EventType::Bluetooth:
+            qe.durationMs = DURATION_BLUETOOTH_MS;
+            qe.title = L"WH-1000XM5";
+            qe.progressPercent = 80;
+            break;
+        case EventType::LowBattery:
+            qe.durationMs = DURATION_LOW_BATT_MS;
+            qe.title = L"Baterai lemah";
+            qe.progressPercent = 15;
+            break;
+        case EventType::TimerDone:
+            qe.durationMs = DURATION_TIMER_DONE_MS;
+            qe.title = L"Timer selesai";
+            break;
+        default:
+            return;
+    }
+
+    PostTransientEvent(qe);
+}
+
+void ServiceManager::CycleDemoScenario() {
+    m_demoIndex = (m_demoIndex + 1) % 9;
+    switch (m_demoIndex) {
+        case 0:
+            m_timerActive = false;
+            m_micActive = false;
+            SetLiveActivity(EventType::Media, true);
+            break;
+        case 1:
+            m_mediaActive = false;
+            m_micActive = false;
+            if (m_timerService && !m_timerService->IsActive()) {
+                m_timerService->Start(30);
+            }
+            SetLiveActivity(EventType::Timer, true);
+            break;
+        case 2:
+            m_mediaActive = false;
+            m_timerActive = false;
+            SetLiveActivity(EventType::MicStatus, true);
+            break;
+        case 3:
+            FireTransient(EventType::Volume);
+            break;
+        case 4:
+            FireTransient(EventType::CapsLock);
+            break;
+        case 5:
+            FireTransient(EventType::Power);
+            break;
+        case 6:
+            FireTransient(EventType::Bluetooth);
+            break;
+        case 7:
+            FireTransient(EventType::LowBattery);
+            break;
+        case 8:
+            FireTransient(EventType::TimerDone);
+            break;
     }
 }
 

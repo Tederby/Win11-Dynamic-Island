@@ -35,5 +35,14 @@ namespace IconPaths {
     constexpr const char* CHECKMARK = "M5 12l5 5 9-10-2-2-7 8-3-3z";
 }
 
+void DrawIcon(
+    ID2D1RenderTarget* rt,
+    ID2D1Factory* factory,
+    ID2D1SolidColorBrush* brush,
+    IconType type,
+    const D2D1_RECT_F& bounds,
+    D2D1_COLOR_F color
+);
+
 } // namespace Graphics
 } // namespace DynamicIsland

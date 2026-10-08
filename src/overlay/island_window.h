@@ -8,6 +8,11 @@
 #include "layout.h"
 
 namespace DynamicIsland {
+
+namespace Services {
+class ServiceManager;
+}
+
 namespace Overlay {
 
 class IslandWindow {
@@ -21,6 +26,17 @@ public:
 
     void SetState(IslandState state);
     void SetCurrentEvent(EventType eventType);
+    void SetServiceManager(Services::ServiceManager* sm) { m_serviceManager = sm; }
+
+    void UpdateMediaState(const MediaState& state) { m_mediaState = state; }
+    void UpdateTimerState(const TimerState& state) { m_timerState = state; }
+    void UpdateMicState(const MicState& state) { m_micState = state; }
+    void UpdateTransientState(const TransientState& state) { m_transientState = state; }
+
+    MediaState& GetMediaState() { return m_mediaState; }
+    TimerState& GetTimerState() { return m_timerState; }
+    MicState& GetMicState() { return m_micState; }
+    TransientState& GetTransientState() { return m_transientState; }
 
     void TriggerAnimationUpdate();
     void Render();
@@ -36,6 +52,12 @@ private:
     HWND m_hwnd = nullptr;
     IslandState m_state = IslandState::Hidden;
     EventType m_currentEvent = EventType::None;
+    Services::ServiceManager* m_serviceManager = nullptr;
+
+    MediaState m_mediaState;
+    TimerState m_timerState;
+    MicState m_micState;
+    TransientState m_transientState;
 
     std::unique_ptr<Graphics::D2DRenderer> m_renderer;
     Graphics::AnimatedValue m_animWidth{0.0f};
@@ -44,13 +66,16 @@ private:
     Graphics::AnimatedValue m_animOpacity{0.0f};
 
     bool m_isHovered = false;
+    float m_waveProgress = 0.0f;
     UINT_PTR m_autoCollapseTimerId = 1001;
     UINT_PTR m_animTimerId = 1002;
+    UINT_PTR m_waveTimerId = 1003;
 
     void ArmAutoCollapse();
     void DisarmAutoCollapse();
     void UpdateDimensions();
     void OnClick(int x, int y);
+    void OnRightClick();
 };
 
 } // namespace Overlay

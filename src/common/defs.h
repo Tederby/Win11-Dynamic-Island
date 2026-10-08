@@ -6,6 +6,14 @@
 #include <memory>
 #include <cstdint>
 
+// Fallback declarations for syntax checking outside Windhawk environment
+#ifndef Wh_Log
+extern "C" void Wh_Log(const wchar_t* format, ...);
+inline const wchar_t* Wh_GetStringSetting(const wchar_t* name, ...) { return nullptr; }
+inline void Wh_FreeStringSetting(const wchar_t* string) {}
+inline int Wh_GetIntSetting(const wchar_t* name, ...) { return 0; }
+#endif
+
 namespace DynamicIsland {
 
 // Taskbar docking position
@@ -54,6 +62,36 @@ constexpr DWORD DURATION_POWER_MS      = 2400;
 constexpr DWORD DURATION_BLUETOOTH_MS  = 2600;
 constexpr DWORD DURATION_LOW_BATT_MS   = 2800;
 constexpr DWORD DURATION_TIMER_DONE_MS = 3200;
+
+// Persistent & Transient state data containers
+struct MediaState {
+    std::wstring title = L"Senbonzakura";
+    std::wstring artist = L"Kurousa-P feat. Hatsune Miku";
+    float progress = 0.3f;
+    bool isPlaying = true;
+};
+
+struct TimerState {
+    int remainingSeconds = 30;
+    int totalSeconds = 30;
+    bool isPaused = false;
+    std::wstring label = L"Fokus";
+    std::wstring session = L"Sesi 1 dari 4";
+};
+
+struct MicState {
+    std::wstring title = L"Mikrofon lagi dipakai";
+    std::wstring appName = L"Discord";
+    bool isActive = true;
+};
+
+struct TransientState {
+    EventType type = EventType::None;
+    std::wstring title;
+    std::wstring subtitle;
+    int value = 0;
+    float progressFraction = 0.0f;
+};
 
 // Configuration settings container
 struct ModSettings {

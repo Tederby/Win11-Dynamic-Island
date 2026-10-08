@@ -31,6 +31,8 @@ private:
     int m_remainingSeconds = 0;
     bool m_isActive = false;
     bool m_isPaused = false;
+
+    void SyncState();
 };
 
 } // namespace Services

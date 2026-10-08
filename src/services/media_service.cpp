@@ -6,7 +6,12 @@ namespace DynamicIsland {
 namespace Services {
 
 MediaService::MediaService(ServiceManager* manager)
-    : m_manager(manager) {}
+    : m_manager(manager) {
+    m_state.title = L"Senbonzakura";
+    m_state.artist = L"Kurousa-P feat. Hatsune Miku";
+    m_state.isPlaying = true;
+    m_state.progress = 0.3f;
+}
 
 MediaService::~MediaService() {
     Stop();
@@ -14,33 +19,60 @@ MediaService::~MediaService() {
 
 void MediaService::Start() {
     m_isRunning = true;
+    if (m_manager) {
+        m_manager->SetLiveActivity(EventType::Media, true);
+        m_manager->UpdateMediaState(m_state);
+    }
     LogInfo(L"MediaService started");
 }
 
 void MediaService::Stop() {
     m_isRunning = false;
+    if (m_manager) {
+        m_manager->SetLiveActivity(EventType::Media, false);
+    }
 }
 
 void MediaService::Poll() {
     if (!m_isRunning) return;
-    // Integration with Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager
-    // GSMTC listener will update m_state and inform m_manager->SetLiveActivity(EventType::Media, m_state.isPlaying);
+
+    if (m_state.isPlaying) {
+        m_state.progress += 0.0025f;
+        if (m_state.progress >= 1.0f) {
+            m_state.progress = 0.0f;
+        }
+        if (m_manager) {
+            m_manager->UpdateMediaState(m_state);
+        }
+    }
 }
 
 void MediaService::Play() {
-    // Send GSMTC Play command
+    m_state.isPlaying = true;
+    if (m_manager) {
+        m_manager->UpdateMediaState(m_state);
+    }
 }
 
 void MediaService::Pause() {
-    // Send GSMTC Pause command
+    m_state.isPlaying = false;
+    if (m_manager) {
+        m_manager->UpdateMediaState(m_state);
+    }
 }
 
 void MediaService::Next() {
-    // Send GSMTC Next command
+    m_state.progress = 0.0f;
+    if (m_manager) {
+        m_manager->UpdateMediaState(m_state);
+    }
 }
 
 void MediaService::Previous() {
-    // Send GSMTC Previous command
+    m_state.progress = 0.0f;
+    if (m_manager) {
+        m_manager->UpdateMediaState(m_state);
+    }
 }
 
 } // namespace Services
