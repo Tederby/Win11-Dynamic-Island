@@ -1,0 +1,29 @@
+{
+  "name": "win11-dynamic-island",
+  "version": "0.1.0",
+  "description": "Dynamic Island mod for Windows 11 built for Windhawk",
+  "main": "win11-dynamic-island.wh.cpp",
+  "scripts": {
+    "bundle": "python scripts/bundle.py",
+    "bundle:watch": "python scripts/bundle.py --watch",
+    "test:preview": "start \"\" \"Dynamic Island Win11 - preview.html\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tederby/Win11-Dynamic-Island.git"
+  },
+  "keywords": [
+    "windhawk",
+    "windows-11",
+    "dynamic-island",
+    "taskbar",
+    "direct2d",
+    "cpp"
+  ],
+  "author": "Tederby",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Tederby/Win11-Dynamic-Island/issues"
+  },
+  "homepage": "https://github.com/Tederby/Win11-Dynamic-Island#readme"
+}

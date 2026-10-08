@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dynamic Island Win11 - preview</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f1f1ef;--fg:#1b1c1f;--mut:#686b74;--card:#fff;--line:#d6d8de;--acc:#2f6bff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121317;--fg:#e8e9ec;--mut:#8b8f99;--card:#1b1d23;--line:#2c2f37;--acc:#6f9bff}}
+:root[data-theme="dark"]{--bg:#121317;--fg:#e8e9ec;--mut:#8b8f99;--card:#1b1d23;--line:#2c2f37;--acc:#6f9bff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Segoe UI Variable","Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px;font-weight:600}
+.sub{color:var(--mut);margin:0 0 14px}
+.panel{display:flex;flex-wrap:wrap;gap:12px 28px;margin:0 0 14px}
+.grp{display:flex;flex-direction:column;gap:6px}
+.grp b{font-size:12px;color:var(--mut);font-weight:500}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+button:focus-visible,.island:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+label.ck{font-size:13px;display:flex;gap:6px;align-items:center;padding:6px 0}
+.note{font-size:13px;color:var(--mut);min-height:44px;margin-top:10px}
+
+.screen{--tb:40px;--spring:cubic-bezier(.34,1.3,.5,1);position:relative;height:460px;border-radius:14px;overflow:hidden;background:radial-gradient(120% 90% at 20% 10%,#4b7bd8 0,#2a3f8f 42%,#141a3a 100%)}
+.work{position:absolute;inset:0;padding:22px 12%}
+.top .work{padding-top:calc(var(--tb) + 22px)}.bottom .work{padding-bottom:calc(var(--tb) + 22px)}
+.left .work{padding-left:calc(var(--tb) + 40px)}.right .work{padding-right:calc(var(--tb) + 40px)}
+.win{height:100%;background:rgba(246,247,251,.95);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.35);color:#333}
+.wt{height:26px;background:#e3e5ee;display:flex;gap:6px;align-items:center;padding:0 10px}
+.wt i{width:8px;height:8px;border-radius:50%;background:#a9aec0}
+.wb{flex:1;padding:14px;display:flex;flex-direction:column;gap:9px}
+.wb s{display:block;height:8px;border-radius:4px;background:#d4d7e3}
+.inp{margin:0 14px 12px;height:30px;border-radius:8px;background:#fff;border:1px solid #cfd3e0;font-size:12px;color:#8a8fa0;display:flex;align-items:center;padding:0 10px}
+
+.tb{position:absolute;background:rgba(30,31,36,.84);backdrop-filter:blur(22px);display:flex;align-items:center;padding:0 8px;transition:transform .38s cubic-bezier(.3,.9,.3,1)}
+.top .tb{left:0;right:0;top:0;height:var(--tb)}.bottom .tb{left:0;right:0;bottom:0;height:var(--tb)}
+.left .tb,.right .tb{top:0;bottom:0;width:var(--tb);flex-direction:column;padding:8px 0}
+.left .tb{left:0}.right .tb{right:0}
+.ah.hid.bottom .tb{transform:translateY(100%)}
+.ic{flex:none;width:calc(var(--tb) - 16px);height:calc(var(--tb) - 16px);border-radius:7px;margin:0 3px}
+.left .ic,.right .ic{margin:3px 0}
+.tray{display:flex;gap:10px;align-items:center;color:#ddd;font-size:11px;margin-left:auto;padding:0 6px}
+.left .tray,.right .tray{flex-direction:column;margin:auto 0 0;gap:4px;padding:0;font-size:10px}
+.zone{position:absolute;left:0;right:0;bottom:0;height:8px;display:none}.bottom.ah .zone{display:block}
+
+.island{position:absolute;left:calc(50% + var(--sx,0px));translate:-50% 0;width:0;height:32px;border-radius:99px;overflow:hidden;color:#fff;background:#0b0b0d;border:1px solid rgba(255,255,255,.13);opacity:0;scale:.6;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.45);transition:width .55s var(--spring),height .55s var(--spring),border-radius .45s var(--spring),opacity .2s,scale .45s var(--spring),background-color .35s,box-shadow .35s,top .45s,bottom .45s}
+.island.on{opacity:1;scale:1}
+.island.emb{background:rgba(255,255,255,.1);box-shadow:none}
+.island.emb.big{background:#0b0b0d;box-shadow:0 14px 34px rgba(0,0,0,.5)}
+.island button{background:none;border:0;color:#fff;padding:6px;border-radius:50%;display:grid;place-items:center}
+.island button:hover{background:rgba(255,255,255,.15)}
+.in{position:absolute;left:0;top:0;width:100%;opacity:0;transition:opacity .15s}
+.in.v{opacity:1;transition:opacity .22s .1s}
+.c{height:calc(var(--tb) - 10px);display:flex;align-items:center;gap:8px;padding:0 11px;font-size:12px;white-space:nowrap}
+.c b{margin-left:auto;font-weight:600}
+svg.i{width:15px;height:15px;fill:currentColor;flex:none}
+.art{flex:none;width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#ff7ab8,#6a5cff)}
+.art.l{width:52px;height:52px;border-radius:11px}
+.mq{width:98px;overflow:hidden}.mq span{display:inline-block;animation:mq 6s ease-in-out infinite alternate}
+@keyframes mq{0%,15%{transform:translateX(0)}85%,100%{transform:translateX(-62px)}}
+.wave{display:flex;gap:2px;align-items:center;height:12px;margin-left:auto}
+.wave i{width:2px;height:100%;border-radius:2px;background:#7ee0c3;animation:w .9s ease-in-out infinite}
+.wave i:nth-child(2){animation-delay:.2s}.wave i:nth-child(3){animation-delay:.45s}
+@keyframes w{50%{transform:scaleY(.3)}}
+.dot{flex:none;width:8px;height:8px;border-radius:50%;background:#ff9f0a;box-shadow:0 0 8px #ff9f0a}
+.vb{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,.2);overflow:hidden}
+.vb i{display:block;height:100%;background:#fff;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.ex{padding:14px;display:flex;flex-direction:column;gap:11px}
+.top2{display:flex;gap:12px;align-items:center}
+.tt b{display:block;font-size:14px}.tt span{font-size:12px;color:#a8abb5}
+.bar{height:4px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:#fff;border-radius:4px}
+.ctl{display:flex;justify-content:center;gap:10px}
+.ctl button.t{border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:4px 16px;font-size:12px}
+.big2{font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;min-width:90px}
+@media (prefers-reduced-motion:reduce){.island,.in,.tb{transition-duration:.01s!important}.wave i,.mq span{animation:none}}
+@media (max-width:560px){.screen{height:420px}.work{padding-left:6%;padding-right:6%}}
+</style></head><body><main>
+<h1>Dynamic Island Win11, versi ideal</h1>
+<p class="sub">Taskbar di atas: island nyatu ke taskbar. Selain itu (bawah, kiri, kanan): island jadi objek floating. Klik island buat expand.</p>
+<div class="panel">
+<div class="grp"><b>Posisi taskbar</b><div class="row" id="gp"><button data-pos="top">Atas</button><button data-pos="bottom" class="on">Bawah</button><button data-pos="left">Kiri</button><button data-pos="right">Kanan</button></div></div>
+<div class="grp"><b>Ukuran taskbar</b><div class="row" id="gt"><button data-tb="40" class="on">Normal 40px</button><button data-tb="34">Compact 34px</button></div></div>
+<div class="grp"><b>Autohide</b><label class="ck"><input type="checkbox" id="ah"> <span id="ahl">Autohide taskbar</span></label></div>
+</div>
+<div class="panel"><div class="grp" style="flex:1"><b>Skenario</b><div class="row" id="gs">
+<button data-s="media">Musik</button><button data-s="timer">Timer</button><button data-s="mic">Mic aktif</button>
+<button data-s="vol">Volume</button><button data-s="caps">Caps Lock</button><button data-s="chg">Charger</button><button data-s="bt">Bluetooth</button><button data-s="low">Baterai lemah</button>
+<button data-s="all">Borong semua</button><button data-s="reset">Reset</button></div></div></div>
+<div class="screen bottom" id="scr">
+<div class="work"><div class="win"><div class="wt"><i></i><i></i><i></i></div><div class="wb"><s style="width:62%"></s><s style="width:86%"></s><s style="width:44%"></s><s style="width:74%"></s></div><div class="inp">Ketik pesan...</div></div></div>
+<div class="tb" id="tb"></div><div class="zone" id="zone"></div>
+<div class="island" id="isl" role="button" tabindex="0" aria-label="Dynamic island"><div class="in" id="in"></div></div>
+</div>
+<p class="note" id="note"></p>
+</main>
+<script>
+const $=s=>document.querySelector(s),scr=$('#scr'),isl=$('#isl'),inn=$('#in'),tbEl=$('#tb');
+const S={pos:'bottom',tb:40,ah:false,hid:false,live:{},q:[],t:null,exp:false,play:true,pg:.3,rem:0,tp:false,caps:false};
+const TOT=30,N0={n:0};let sig='',colT;
+const P={play:'M8 5v14l11-7z',pause:'M6 5h4v14H6zm8 0h4v14h-4z',prev:'M6 6h2v12H6zm3 6 9-6v12z',next:'M16 6h2v12h-2zM6 18V6l9 6z',vol:'M4 9v6h4l5 4V5L8 9z',caps:'M12 4 4 13h5v5h6v-5h5z',bolt:'M13 2 5 14h6l-1 8 8-12h-6z',bt:'M7 7l10 10-5 5V2l5 5L7 17',bat:'M3 8h16v8H3zM20 11h2v2h-2z',ok:'M5 12l5 5 9-10-2-2-7 8-3-3z'};
+const ic=k=>`<svg class="i" viewBox="0 0 24 24"><path d="${P[k]}"/></svg>`;
+const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+const ring=()=>`<svg width="16" height="16" viewBox="0 0 16 16" style="flex:none"><circle cx="8" cy="8" r="6" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="2"/><circle class="rg" cx="8" cy="8" r="6" fill="none" stroke="#ff9f0a" stroke-width="2" stroke-dasharray="37.7" stroke-dashoffset="${37.7*(1-S.rem/TOT)}" transform="rotate(-90 8 8)"/></svg>`;
+const cp=(w,h,after)=>({c:{w,html:`<div class="c">${h}</div>`},after});
+const V={ // live activities (persisten, bisa di-expand)
+ media:()=>({c:{w:196,html:`<div class="c"><div class="art"></div><div class="mq"><span>Senbonzakura - Miku</span></div><div class="wave"><i></i><i></i><i></i></div></div>`},
+  e:{w:340,ht:150,html:`<div class="ex"><div class="top2"><div class="art l"></div><div class="tt"><b>Senbonzakura</b><span>Kurousa-P feat. Hatsune Miku</span></div></div><div class="bar"><i id="pg" style="width:${S.pg*100}%"></i></div><div class="ctl"><button data-a="prev">${ic('prev')}</button><button data-a="pp" id="pp">${ic(S.play?'pause':'play')}</button><button data-a="next">${ic('next')}</button></div></div>`}}),
+ timer:()=>({c:{w:176,html:`<div class="c">${ring()}<span data-t>${fmt(S.rem)}</span><b style="color:#a8abb5;font-weight:400">Fokus</b></div>`},
+  e:{w:300,ht:124,html:`<div class="ex"><div class="top2"><div class="big2" data-t>${fmt(S.rem)}</div><div class="tt"><b>Fokus</b><span>Sesi 1 dari 4</span></div></div><div class="ctl"><button class="t" data-a="tp">${S.tp?'Lanjut':'Jeda'}</button><button class="t" data-a="stop">Stop</button></div></div>`}}),
+ mic:()=>({c:{w:176,html:`<div class="c"><span class="dot"></span><span>Mikrofon aktif</span></div>`},
+  e:{w:280,ht:78,html:`<div class="ex"><div class="top2"><span class="dot"></span><div class="tt"><b>Mikrofon lagi dipakai</b><span>Discord</span></div></div></div>`}})
+};
+const T={ // event sekejap (auto-hilang, gak nyuri fokus)
+ vol:()=>cp(206,`${ic('vol')}<div class="vb"><i id="vf" style="width:30%"></i></div><b>68</b>`,()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{const e=$('#vf');e&&(e.style.width='68%')}))),
+ caps:a=>cp(160,`${ic('caps')}<span>Caps Lock</span><b>${a?'ON':'OFF'}</b>`),
+ chg:()=>cp(196,`<span style="color:#30d158">${ic('bolt')}</span><span>Mengisi daya</span><b>62%</b>`),
+ bt:()=>cp(244,`${ic('bt')}<span>WH-1000XM5</span><b>80%</b>`),
+ low:()=>cp(196,`<span style="color:#ff453a">${ic('bat')}</span><span>Baterai lemah</span><b style="color:#ff453a">15%</b>`),
+ done:()=>cp(204,`<span style="color:#30d158">${ic('ok')}</span><span>Timer selesai</span>`)
+};
+const DUR={vol:1800,caps:1500,chg:2400,bt:2600,low:2800,done:3200};
+function curView(){
+ if(S.t)return S.t.v;
+ const k=['mic','timer','media'].find(k=>S.live[k]);
+ return k?{...V[k](),k}:null;
+}
+function render(){
+ const v=curView(),ex=S.exp&&v&&v.e;
+ const key=v?(v.k||'')+(v.n||'')+(ex?'E':'C'):'-';
+ if(key===sig)return;sig=key;
+ const ch=S.tb-8;
+ isl.classList.toggle('big',!!ex);
+ inn.classList.remove('v');
+ if(!v){isl.classList.remove('on');isl.style.width='0px';return}
+ const d=ex?v.e:v.c;
+ isl.classList.add('on');
+ isl.style.width=d.w+'px';
+ isl.style.height=(ex?d.ht:ch)+'px';
+ isl.style.borderRadius=ex?'26px':(ch/2)+'px';
+ setTimeout(()=>{if(sig!==key)return;inn.innerHTML=d.html;v.after&&v.after();requestAnimationFrame(()=>inn.classList.add('v'))},130);
+}
+function pump(){
+ if(S.t||!S.q.length)return;
+ const n=S.q.shift();S.exp=false;
+ S.t={v:{...T[n.id](n.a),k:n.id,n:++N0.n}};render();
+ setTimeout(()=>{S.t=null;S.q.length?pump():render()},DUR[n.id]);
+}
+const fire=(id,a)=>{S.q.push({id,a});pump()};
+function sync(){document.querySelectorAll('[data-s]').forEach(b=>{if(['media','timer','mic'].includes(b.dataset.s))b.classList.toggle('on',!!S.live[b.dataset.s])})}
+function tog(k){
+ if(S.live[k])delete S.live[k];else{S.live[k]=1;if(k==='timer'){S.rem=TOT;S.tp=false}}
+ S.exp=false;sync();render();
+}
+function arm(){clearTimeout(colT);if(S.exp)colT=setTimeout(()=>{S.exp=false;render()},5000)}
+isl.addEventListener('click',e=>{
+ const v=curView();if(!v||!v.e)return;
+ const b=e.target.closest('[data-a]');
+ if(b){act(b.dataset.a);arm();return}
+ S.exp=!S.exp;render();arm();
+});
+isl.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();isl.click()}});
+isl.addEventListener('mouseenter',()=>clearTimeout(colT));
+isl.addEventListener('mouseleave',arm);
+function act(a){
+ if(a==='pp'){S.play=!S.play;$('#pp').innerHTML=ic(S.play?'pause':'play')}
+ else if(a==='next'||a==='prev')S.pg=0;
+ else if(a==='tp'){S.tp=!S.tp;document.querySelector('[data-a=tp]').textContent=S.tp?'Lanjut':'Jeda'}
+ else if(a==='stop')tog('timer');
+}
+function upd(){
+ document.querySelectorAll('[data-t]').forEach(e=>e.textContent=fmt(S.rem));
+ document.querySelectorAll('.rg').forEach(e=>e.style.strokeDashoffset=37.7*(1-S.rem/TOT));
+}
+setInterval(()=>{if(S.live.timer&&!S.tp){S.rem--;upd();if(S.rem<=0){delete S.live.timer;S.exp=false;sync();fire('done')}}},1000);
+setInterval(()=>{if(S.live.media&&S.play){S.pg=(S.pg+.0025)%1;const e=$('#pg');e&&(e.style.width=S.pg*100+'%')}},250);
+
+// ---- placement: top = nyatu ke taskbar, lainnya = floating ----
+const NT={top:'Taskbar di atas: island jadi bagian taskbar (tinggi ikut ukuran taskbar, background nyatu). Pas expand, dia tumbuh ke bawah, menjauhi taskbar.',
+ bottom:'Taskbar di bawah: island floating, nempel persis di atas taskbar dan expand ke atas. Perhatiin dia sedikit overlap ke kolom ketik: itu alasan compact state harus kecil.',
+ left:'Taskbar di kiri: diperlakuin kayak taskbar bawah. Island floating di tengah area kerja (bukan tengah layar penuh) dan expand ke atas.',
+ right:'Taskbar di kanan: sama kayak kiri, island digeser ke tengah area kerja.'};
+function place(keep){
+ scr.className='screen '+S.pos+(S.ah?' ah':'')+(S.ah&&S.hid?' hid':'');
+ scr.style.setProperty('--tb',S.tb+'px');
+ const top=S.pos==='top';
+ isl.classList.toggle('emb',top);
+ isl.style.setProperty('--sx',S.pos==='left'?S.tb/2+'px':S.pos==='right'?-S.tb/2+'px':'0px');
+ if(top){isl.style.top='4px';isl.style.bottom='auto'}
+ else{isl.style.top='auto';isl.style.bottom=(S.pos==='bottom'&&!(S.ah&&S.hid)?S.tb+10:14)+'px'}
+ const ahOk=S.pos==='bottom';$('#ah').disabled=!ahOk;
+ $('#ahl').textContent=ahOk?'Autohide taskbar':'Autohide taskbar (cuma resmi di bawah, di sini unsupported)';
+ $('#note').textContent=NT[S.pos]+(S.ah&&ahOk?' Autohide nyala: pas taskbar ngumpet, island turun ke tepi layar dan expand-nya ditutup. Hover tepi bawah buat munculin lagi.':'');
+ if(!keep)sig='';render();
+}
+function setPos(p){
+ S.pos=p;if(p!=='bottom'){S.ah=false;S.hid=false;$('#ah').checked=false}
+ S.exp=false;isl.classList.remove('on');setTimeout(()=>place(),230);
+ document.querySelectorAll('[data-pos]').forEach(b=>b.classList.toggle('on',b.dataset.pos===p));
+}
+$('#gp').onclick=e=>{const b=e.target.closest('[data-pos]');b&&setPos(b.dataset.pos)};
+$('#gt').onclick=e=>{const b=e.target.closest('[data-tb]');if(!b)return;S.tb=+b.dataset.tb;
+ document.querySelectorAll('[data-tb]').forEach(x=>x.classList.toggle('on',x===b));place()};
+$('#ah').onchange=e=>{S.ah=e.target.checked;S.hid=S.ah;S.exp=false;place(true)};
+$('#zone').onmouseenter=()=>{if(S.ah&&S.hid){S.hid=false;place(true)}};
+function leave(e){const r=e.relatedTarget;if(S.ah&&!S.hid&&!(r&&(tbEl.contains(r)||isl.contains(r)||r===$('#zone')))){S.hid=true;S.exp=false;place(true);render()}}
+tbEl.addEventListener('mouseleave',leave);isl.addEventListener('mouseleave',leave);
+$('#gs').onclick=e=>{
+ const b=e.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;
+ if(['media','timer','mic'].includes(s))tog(s);
+ else if(s==='caps'){S.caps=!S.caps;fire('caps',S.caps)}
+ else if(s==='all'){if(!S.live.media)tog('media');['chg','bt','caps','vol'].forEach(i=>{if(i==='caps')S.caps=!S.caps;fire(i,S.caps)})}
+ else if(s==='reset'){S.live={};S.q=[];S.t=null;S.exp=false;S.rem=0;sync();render()}
+ else fire(s);
+};
+// isi taskbar: icon rata kiri, tray di ujung
+tbEl.innerHTML=[210,350,24,150,280,100,330].map(h=>`<i class="ic" style="background:linear-gradient(135deg,hsl(${h} 70% 60%),hsl(${h+30} 70% 40%))"></i>`).join('')+'<div class="tray"><span>ENG</span><span>21.04</span></div>';
+place();
+</script></body></html>
