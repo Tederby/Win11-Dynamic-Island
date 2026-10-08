@@ -154,7 +154,7 @@ void D2DRenderer::DrawTextString(const std::wstring& text, const D2D1_RECT_F& re
     if (!format) return;
 
     m_solidBrush->SetColor(color);
-    m_renderTarget->DrawTextW(
+    m_renderTarget->DrawText(
         text.c_str(),
         static_cast<UINT32>(text.length()),
         format,

@@ -1101,7 +1101,7 @@ void D2DRenderer::DrawTextString(const std::wstring& text, const D2D1_RECT_F& re
     if (!format) return;
 
     m_solidBrush->SetColor(color);
-    m_renderTarget->DrawTextW(
+    m_renderTarget->DrawText(
         text.c_str(),
         static_cast<UINT32>(text.length()),
         format,
@@ -1594,9 +1594,9 @@ void ServiceManager::SetLiveActivity(EventType type, bool active) {
         EventType current = ResolveCurrentLiveActivity();
         if (current != EventType::None) {
             m_window->SetCurrentEvent(current);
-            m_window->SetState(Overlay::IslandState::Compact);
+            m_window->SetState(IslandState::Compact);
         } else {
-            m_window->SetState(Overlay::IslandState::Hidden);
+            m_window->SetState(IslandState::Hidden);
         }
     }
 }
@@ -1608,9 +1608,9 @@ void ServiceManager::PumpNextEvent() {
             EventType live = ResolveCurrentLiveActivity();
             if (live != EventType::None) {
                 m_window->SetCurrentEvent(live);
-                m_window->SetState(Overlay::IslandState::Compact);
+                m_window->SetState(IslandState::Compact);
             } else {
-                m_window->SetState(Overlay::IslandState::Hidden);
+                m_window->SetState(IslandState::Hidden);
             }
         }
         return;
@@ -1623,7 +1623,7 @@ void ServiceManager::PumpNextEvent() {
 
     if (m_window) {
         m_window->SetCurrentEvent(m_currentTransient.type);
-        m_window->SetState(Overlay::IslandState::Compact);
+        m_window->SetState(IslandState::Compact);
     }
 }
 
