@@ -11,6 +11,7 @@ import sys
 import re
 import subprocess
 import tempfile
+import shutil
 from pathlib import Path
 
 # Possible Windhawk installation paths
