@@ -40,9 +40,8 @@ Agents and developers must inspect this document during startup and keep task st
   - [ ] Acceleration Fix: Drive marquee scrolling strictly by high-precision QPC delta elapsed time (`deltaTimeSeconds * SPEED_PX_PER_SEC`) instead of timer tick counts to eliminate the speed-up glitch when concurrent background events fire.
 - [ ] [P1] Remove Test Right-Click Interaction:
   - [ ] Remove legacy right-click scenario cycling handler (`WM_RBUTTONUP` / `OnRightClick()`) left over from early prototype testing. Retain global hotkeys (`Ctrl+Win+1..9, 0`).
-- [ ] [P1] Left-Click State Machine Refinement & Long-Press Support:
+- [ ] [P1] Left-Click State Machine Refinement:
   - [ ] Fix premature auto-collapse bouncing: clicking to expand should reliably lock the island open without immediately bouncing back to compact state.
-  - [ ] Press-and-Hold (Long Press): Implement hold timer (350-500ms) to trigger expanded view or contextual actions, distinguishing between quick tap and hold.
 
 ---
 
