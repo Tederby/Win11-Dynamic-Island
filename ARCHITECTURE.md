@@ -6,40 +6,42 @@ This document describes the architectural layout, rendering pipeline, animation 
 
 ## 1. High-Level Architecture Overview
 
-```
-+------------------------------------------------------------------------+
-|                         Windhawk Mod Engine                            |
-|        (Wh_ModInit, Wh_ModUninit, Wh_ModSettingsChanged hooks)         |
-+------------------------------------+-----------------------------------+
-                                     |
-                                     v
-+------------------------------------------------------------------------+
-|                            Main Coordinator                            |
-|             (Manages lifecycle, timer ticks, settings sync)            |
-+--------------------+-----------------------------------+---------------+
-                     |                                   |
-                     v                                   v
-    +----------------------------------+   +-----------------------------+
-    |         Service Manager          |   |      Island Window          |
-    |  - Priority Queue                |   |  - Layered HWND (WS_POPUP)  |
-    |  - Transient HUD Dispatcher      |   |  - Direct2D Render Target   |
-    |  - Live Activity State Resolver  |   |  - Mouse / Hover Tracker    |
-    +----------------+-----------------+   +--------------+--------------+
-                     |                                    |
-     +---------------+---------------+                    v
-     |                               |           +-----------------------+
-     v                               v           |  Layout Engine        |
-+--------------------+     +------------------+  |  - Taskbar info & DPI |
-|   Live Activities  |     |  Transient HUDs  |  |  - Top embed vs float |
-|  - Media (GSMTC)   |     |  - Volume (MMDev)|  |  - Compact vs Expanded|
-|  - Focus Timer     |     |  - Caps Lock     |  +--------------+--------+
-|  - Microphone      |     |  - Power/Battery |                 |
-+--------------------+     |  - Bluetooth     |                 v
-                           +------------------+  +----------------------------+
-                                                 |      Animation Engine      |
-                                                 |  - Spring Physics          |
-                                                 |  - Cubic-Bezier Evaluator  |
-                                                 +----------------------------+
+```mermaid
+flowchart TD
+    Engine["<b>Windhawk Mod Engine</b><br/>Wh_ModInit, Wh_ModUninit,<br/>Wh_ModSettingsChanged hooks"]
+
+    Coord["<b>Main Coordinator</b><br/>Manages lifecycle, timer ticks,<br/>settings sync"]
+
+    SM["<b>Service Manager</b><br/>- Priority Queue<br/>- Transient HUD Dispatcher<br/>- Live Activity State Resolver"]
+
+    IW["<b>Island Window</b><br/>- Layered HWND (WS_POPUP)<br/>- Direct2D Render Target<br/>- Mouse / Hover Tracker"]
+
+    subgraph LA["Live Activities"]
+        direction TB
+        LA1["Media (GSMTC)"]
+        LA2["Focus Timer"]
+        LA3["Microphone"]
+    end
+
+    subgraph HUD["Transient HUDs"]
+        direction TB
+        H1["Volume (MMDev)"]
+        H2["Caps Lock"]
+        H3["Power/Battery"]
+        H4["Bluetooth"]
+    end
+
+    LE["<b>Layout Engine</b><br/>- Taskbar info & DPI<br/>- Top embed vs float<br/>- Compact vs Expanded"]
+
+    AE["<b>Animation Engine</b><br/>- Spring Physics<br/>- Cubic-Bezier Evaluator"]
+
+    Engine --> Coord
+    Coord --> SM
+    Coord --> IW
+    SM --> LA
+    SM --> HUD
+    IW --> LE
+    LE --> AE
 ```
 
 ---
@@ -47,40 +49,58 @@ This document describes the architectural layout, rendering pipeline, animation 
 ## 2. Window & Direct2D Rendering Pipeline
 
 ### 2.1 Window Topology
-The Dynamic Island UI is hosted within a top-level layered popup window:
-- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED`.
-- **Transparency**: Uses `SetLayeredWindowAttributes` with colorkey and alpha compositing, allowing smooth anti-aliased rounded corners and semi-transparent backgrounds without window borders.
-- **Hit-Testing**: The window responds to clicks, hover transitions, and dispatches collapse/expand commands.
+The Dynamic Island UI is hosted within a top-level transparent popup window:
+- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW`.
+- **Transparency & Anti-Aliasing**: Direct2D per-pixel alpha composition via `ID2D1DCRenderTarget` backed by a 32-bit ARGB DIB section, presented atomically to the DWM compositor via `UpdateLayeredWindow` with `ULW_ALPHA` (`AC_SRC_ALPHA`). Renders smooth sub-pixel antialiased squircle capsules without opaque black overlays, 1-bit GDI `SetWindowRgn` staircase artifacts, composition stalls, or colorkey fringing.
+- **Hit-Testing & Controls**:
+  - Non-blocking `WM_NCHITTEST`: Tests cursor against mathematical squircle geometry, returning `HTCLIENT` inside the island and `HTTRANSPARENT` in the transparent margins to pass mouse input seamlessly to background windows/taskbars.
+  - AppBar & Top Taskbar Z-Order: `SetWindowPos(HWND_TOPMOST)` without `SWP_NOZORDER` and `WM_MOUSEACTIVATE` returning `MA_NOACTIVATE` guarantees reliable click interception when docked on top taskbar over `Shell_TrayWnd`.
+  - State machine: `WM_LBUTTONDOWN` / `WM_LBUTTONUP` with `SetCapture` / `ReleaseCapture` and DPI-scaled button boundaries.
+  - Compact state: Click expands the island into full activity mode with immediate hover retention.
+  - Expanded state:
+    - Media Controls: Previous, Play/Pause, and Next buttons with DPI-aware hitboxes.
+    - Timer Controls: Pause/Resume (`Jeda`/`Lanjut`) and Stop buttons.
+    - Content body click: Keeps island open and resets auto-collapse timer without premature dismissal.
+  - Global Hotkeys: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>1..9, 0</kbd> simulates Media, Timer, Mic, Volume, CapsLock, Power, Bluetooth, Low Battery, Timer Done, and scenario cycling.
+  - Hover Tracking: Pauses the 1.5-second auto-collapse timer (`autoCollapseDelayMs = 1500`) while hovered.
 
 ### 2.2 Direct2D / DirectWrite Rendering
 - **Factory Creation**: Single-threaded `ID2D1Factory` and shared `IDWriteFactory`.
-- **Render Target**: `ID2D1HwndRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
+- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and character ellipsis trimming, plus seamless continuous infinite-loop horizontal marquee (`DrawMarqueeText`) driven strictly by high-precision QPC delta elapsed time at 16 px/s with hardware `IDWriteTextLayout` layout caching at 60 FPS.
+- **Album Art Streaming**: WinRT `IRandomAccessStreamReference` stream retrieved and decoded asynchronously on dedicated background worker thread into 32bpp PBGRA via WIC (`IWICImagingFactory`), presented distortion-free with 1:1 center cover-crop (`object-fit: cover`) via `ID2D1BitmapBrush` in compact (18x18) and expanded (52x52) states, with graceful fallback to dynamic gradient.
+- **Render Target**: `ID2D1DCRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
 - **Draw Call Cycle**:
-  1. `BeginDraw()`
+  1. `BeginDraw()` (Binds 32-bit DIB section memory DC)
   2. `Clear(D2D1::ColorF(0, 0, 0, 0))` (Clear transparent surface)
-  3. `DrawRoundedPill()` (Island background capsule with border and corner radius)
+  3. `DrawRoundedPill()` (Pure pitch-black `#000000` squircle capsule with zero outline stroke)
   4. Context-sensitive elements:
-     - Equalizer bars / Waveform (`DrawEqualizerWaves`)
+     - Digital clock (`HH:mm`) dead-centered mathematically with breathing status dot in idle compact state
+     - Album art thumbnail cover-crop or gradient fallback
+     - Equalizer bars / Waveform (`DrawEqualizerWaves`) with WASAPI loopback RMS reactivity
+     - Continuous wrapping marquee song title & artist (`DrawMarqueeText`)
      - Radial progress ring (`DrawProgressRing`)
      - Battery / Volume progress slider (`DrawProgressBar`)
      - Privacy status dot (`DrawStatusDot`)
      - Text labels via DirectWrite (`Segoe UI Variable`)
   5. `EndDraw()`
+  6. `PresentLayeredWindow()` (`UpdateLayeredWindow` with `ULW_ALPHA`)
 
 ---
 
 ## 3. Animation Engine: Spring Physics & Easing
 
-In [`prototype.html`](prototype.html), fluid spring transitions are defined by:
+Fluid spring transitions are defined by the cubic-bezier easing curve:
 ```css
 --spring: cubic-bezier(0.34, 1.3, 0.5, 1);
 ```
 
-### Numerical Evaluation
+### Numerical Evaluation & Motion Dynamics
 `Graphics::EvaluateCubicBezier` implements Newton-Raphson approximation to invert the cubic curve $X(t) = target_x$ in 8 iterations, solving for $t$, and evaluating $Y(t)$. This gives authentic native responsiveness matching modern fluid interfaces:
-- Overshoot on expansion for an organic, bouncy feel.
-- High initial velocity that decelerates smoothly into the target geometry.
-- Independent animated properties for `Width`, `Height`, `CornerRadius`, and `Opacity`.
+- **Void Entry**: Awakening from `Hidden` state animates smoothly from 35% scale and 0% opacity (`scale: 0.35 -> 1.0`, `opacity: 0.0 -> 1.0`).
+- **Same-Size Transitions**: Switching between events of identical or similar size performs two-layer alpha crossfade blending with a subtle tactile micro-pulse punch (`scale: 1.035 -> 1.0`).
+- **Overshoot**: Expansion naturally overshoots for an organic, bouncy feel.
+- **Deceleration**: High initial velocity decelerates smoothly into the target geometry.
+- **Properties**: Independent animated properties for `Width`, `Height`, `CornerRadius`, `Opacity`, `CrossfadeAlpha`, and `Scale`.
 
 ---
 
@@ -144,3 +164,14 @@ Because Windhawk expects a single monolithic compilation unit (`.wh.cpp`), we us
 7. **`scripts/bundle.py`**: Reads `src/main.cpp`, recursively inlines internal `#include` trees, de-duplicates system `#include <...>` headers to the top, and emits `win11-dynamic-island.wh.cpp`.
 
 This allows standard C++ modern modular practices during development while retaining 100% compatibility with Windhawk's single-file distribution model.
+
+### 6.1 Windhawk Compiler & Linker Protocol
+- **Complete Compiler & Linker Guide**: See [docs/COMPILER_GUIDE.md](docs/COMPILER_GUIDE.md) for full pitfall catalog, WinRT iteration rules, and linker architecture.
+- **Linker Libraries (`@compilerOptions`)**: Mod metadata in `src/metadata/mod_header.h` must declare all 15 required import libraries:
+  `-ld2d1 -ldwrite -lwindowscodecs -luxtheme -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lshcore -lversion -lgdi32 -ldwmapi -luser32 -lshell32 -ladvapi32`.
+  Specifying `@compilerOptions` overrides default linker libraries; omitting `-luser32`, `-lshell32`, `-ladvapi32`, `-loleaut32`, `-lruntimeobject`, or `-ldwmapi` causes undefined symbol errors in `ld.lld`.
+- **Automated Verification**: Always verify builds using `python scripts/verify.py` (or `npm run verify`), which compiles the bundle for both `x86_64` and `i686` targets using Windhawk's native Clang toolchain before deployment.
+- **Windhawk API Fallback Guard (`WH_MOD`)**: The Windhawk engine pre-includes `windhawk_api.h` and defines `WH_MOD`. All mock/fallback declarations in `src/common/defs.h` (`Wh_Log`, `Wh_Get*Setting`) must be strictly guarded with `#ifndef WH_MOD` to prevent language linkage conflicts and redefinition errors.
+- **C++/WinRT Collection Traversal**: Never use range-based for loops over `IVectorView<T>` or `IVector<T>` due to Clang template deduction limitations on `begin()`. Use index-based traversal (`Size()` / `GetAt(i)`).
+- **Inline Variables**: Global constants in headers (colors, SVG icon paths) must use `inline constexpr` to prevent Clang `-Wunused-const-variable` warnings across compilation units.
+

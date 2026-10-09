@@ -6,6 +6,7 @@
   "scripts": {
     "bundle": "python scripts/bundle.py",
     "bundle:watch": "python scripts/bundle.py --watch",
+    "verify": "python scripts/verify.py",
     "test:preview": "start \"\" \"prototype.html\"",
     "prototype": "start \"\" \"prototype.html\""
   },

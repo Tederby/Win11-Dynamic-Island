@@ -33,14 +33,26 @@ float EvaluateCubicBezier(float x1, float y1, float x2, float y2, float x) {
            t * t * t;
 }
 
-void AnimatedValue::SetTarget(float target, DWORD durationMs) {
+double GetHighPrecisionTimeMs() {
+    static LARGE_INTEGER freq{};
+    static bool initialized = false;
+    if (!initialized) {
+        QueryPerformanceFrequency(&freq);
+        initialized = true;
+    }
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (static_cast<double>(counter.QuadPart) * 1000.0) / static_cast<double>(freq.QuadPart);
+}
+
+void AnimatedValue::SetTarget(float target, double durationMs) {
     if (std::abs(m_target - target) < 0.001f && !m_isAnimating) {
         return;
     }
     m_start = m_current;
     m_target = target;
-    m_durationMs = (durationMs > 0) ? durationMs : 1;
-    m_startTime = GetTickCount();
+    m_durationMs = (durationMs > 0.0) ? durationMs : 1.0;
+    m_startTime = GetHighPrecisionTimeMs();
     m_isAnimating = true;
 }
 
@@ -51,7 +63,7 @@ void AnimatedValue::SnapTo(float value) {
     m_isAnimating = false;
 }
 
-void AnimatedValue::Update(DWORD currentTimeMs) {
+void AnimatedValue::Update(double currentTimeMs) {
     if (!m_isAnimating) return;
 
     if (currentTimeMs >= m_startTime + m_durationMs) {
@@ -60,8 +72,8 @@ void AnimatedValue::Update(DWORD currentTimeMs) {
         return;
     }
 
-    float linearProgress = static_cast<float>(currentTimeMs - m_startTime) / static_cast<float>(m_durationMs);
-    // Cubic bezier used in CSS prototype: cubic-bezier(.34, 1.3, .5, 1)
+    float linearProgress = static_cast<float>((currentTimeMs - m_startTime) / m_durationMs);
+    // Spring easing curve: cubic-bezier(.34, 1.3, .5, 1)
     float curvedProgress = EvaluateCubicBezier(0.34f, 1.3f, 0.5f, 1.0f, linearProgress);
     m_current = m_start + (m_target - m_start) * curvedProgress;
 }

@@ -8,6 +8,18 @@
     - auto: Automatically detect taskbar position (embedded on top, floating on bottom/sides)
     - top_embed: Always embed directly into top edge
     - floating: Always float as an overlay window
+- idleVisibilityMode: always_visible
+  $name: Idle Visibility Mode
+  $description: Choose island appearance when no transient HUD or live activity is active.
+  $options:
+    - always_visible: Compact pill remains visible on taskbar during idle state
+    - events_only: Island remains hidden when idle, appearing only during activities or alerts
+- mediaVisibilityPolicy: always_visible
+  $name: Media Playback Visibility Policy
+  $description: Determine how media playback displays on the island.
+  $options:
+    - always_visible: Island stays visible while media is actively playing
+    - track_change_only: Island pops up transiently for 3-4 seconds on track change, then collapses back to hidden
 - enableMedia: true
   $name: Media Controls & Now Playing
   $description: Show active media playback, track marquee, equalizer, and playback controls.
@@ -29,11 +41,14 @@
 - enableBluetoothHUD: true
   $name: Bluetooth HUD
   $description: Show badge when Bluetooth headphones/devices connect with battery status.
-- autoCollapseSeconds: 5
-  $name: Auto-collapse Delay
-  $description: Seconds of inactivity before an expanded island collapses back to compact view.
+- autoCollapseDelayMs: 1500
+  $name: Auto-collapse Delay (ms)
+  $description: Milliseconds of inactivity after cursor leaves before an expanded island collapses back to compact view (1500ms = 1.5s).
 - animationSpeed: 1.0
   $name: Animation Speed Multiplier
   $description: Adjust speed of spring transition animations (1.0 = default fluid physics).
+- enableDebugHotkeys: true
+  $name: Enable Debug Hotkeys
+  $description: Enable global hotkeys (Ctrl+Win+1..9, 0) to simulate volume, battery, media, and other HUD events.
 */
 // ==/WindhawkModSettings==

@@ -14,10 +14,10 @@ IslandMetrics LayoutEngine::CalculateMetrics(
     UINT dpi = tbInfo.dpi;
 
     int tbHeight = tbInfo.taskbarRect.bottom - tbInfo.taskbarRect.top;
-    if (tbHeight <= 0) tbHeight = 40;
+    if (tbHeight <= 0) tbHeight = 34;
 
-    int compactH = tbHeight - 8;
-    if (compactH < 28) compactH = 28;
+    int compactH = tbHeight - 6;
+    if (compactH < 26) compactH = 26;
 
     m.isEmbedded = (tbInfo.position == TaskbarPosition::Top);
 
@@ -37,7 +37,7 @@ IslandMetrics LayoutEngine::CalculateMetrics(
             case EventType::Bluetooth:  defaultWidth = 244.0f; break;
             case EventType::LowBattery: defaultWidth = 196.0f; break;
             case EventType::TimerDone:  defaultWidth = 204.0f; break;
-            default:                    defaultWidth = 180.0f; break;
+            default:                    defaultWidth = 108.0f; break;
         }
 
         if (customWidth > 0) defaultWidth = static_cast<float>(customWidth);
@@ -73,26 +73,28 @@ IslandMetrics LayoutEngine::CalculateMetrics(
         m.cornerRadius = Utils::ScaleDpiF(26.0f, dpi);
     }
 
-    // Position calculation
+    // Horizontal centering
     int screenWidth = tbInfo.monitorRect.right - tbInfo.monitorRect.left;
     int centerX = tbInfo.monitorRect.left + screenWidth / 2;
 
-    // Shift centerX if taskbar is left/right
-    if (tbInfo.position == TaskbarPosition::Left) {
-        int workCenter = (tbInfo.workAreaRect.left + tbInfo.workAreaRect.right) / 2;
-        centerX = workCenter;
-    } else if (tbInfo.position == TaskbarPosition::Right) {
-        int workCenter = (tbInfo.workAreaRect.left + tbInfo.workAreaRect.right) / 2;
-        centerX = workCenter;
+    if (tbInfo.position == TaskbarPosition::Left || tbInfo.position == TaskbarPosition::Right) {
+        centerX = (tbInfo.workAreaRect.left + tbInfo.workAreaRect.right) / 2;
     }
 
     m.posX = static_cast<float>(centerX) - (m.width / 2.0f);
 
+    // Vertical placement
     if (m.isEmbedded) {
-        // Top edge: sits in taskbar, expands downwards
-        m.posY = static_cast<float>(tbInfo.taskbarRect.top + 4);
+        int topAnchor = (tbInfo.taskbarRect.top >= tbInfo.monitorRect.top)
+            ? tbInfo.taskbarRect.top
+            : tbInfo.monitorRect.top;
+
+        if (state == IslandState::Expanded) {
+            m.posY = static_cast<float>(topAnchor + 3);
+        } else {
+            m.posY = static_cast<float>(topAnchor) + static_cast<float>(tbHeight - compactH) / 2.0f;
+        }
     } else {
-        // Floating above bottom taskbar or work area bottom
         int bottomAnchor = tbInfo.workAreaRect.bottom;
         if (tbInfo.position == TaskbarPosition::Bottom && !tbInfo.isAutoHide) {
             bottomAnchor = tbInfo.taskbarRect.top - 10;

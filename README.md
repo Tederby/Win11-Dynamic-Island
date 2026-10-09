@@ -18,16 +18,6 @@ While previous implementations were limited in taskbar edge support and event ha
 2. **Interactive Live Activities**: Persistent, expandable cards for media playback, focus sessions, and privacy indicators.
 3. **Smart HUD Notifications**: Low-latency, non-focus-stealing transient pills for volume changes, Caps Lock toggles, AC charging states, Bluetooth battery info, and more.
 4. **Authentic Spring Physics**: Fluid easing based on `cubic-bezier(0.34, 1.3, 0.5, 1.0)` that morphs smoothly between compact and expanded states.
-5. **Interactive UI Prototype**: Bundled with [`prototype.html`](./prototype.html) showcasing the intended visual design, transitions, and behavior.
-
----
-
-## 🎨 Interactive Prototype Reference
-
-You can preview the interactive UI prototype and transition states directly in your browser:
-- Open [`prototype.html`](./prototype.html) in any modern browser.
-- Test taskbar positions (Top, Bottom, Left, Right) and sizes (Normal 40px, Compact 34px).
-- Toggle auto-hide, live scenarios (Media, Focus Timer, Microphone), and transient events (Volume, Caps Lock, Charger, Bluetooth, Low Battery).
 
 ---
 
@@ -93,12 +83,13 @@ win11-dynamic-island/
 │   └── main.cpp             # Main orchestrator & Windhawk entry hooks
 ├── scripts/
 │   └── bundle.py            # Python bundler that resolves modular code into .wh.cpp
-├── prototype.html           # Interactive HTML/CSS reference prototype
+├── prototype.html           # Standalone HTML/CSS preview mockup (optional)
+├── TODO.md                  # Project task board, roadmap, and backlog tracker
 ├── win11-dynamic-island.wh.cpp # Generated monolithic Windhawk mod (gitignored)
 └── package.json             # NPM convenience scripts
 ```
 
-For deeper technical details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For deeper technical details, see [ARCHITECTURE.md](ARCHITECTURE.md). Active developments, upcoming features, and task statuses are tracked in [TODO.md](TODO.md).
 
 ---
 

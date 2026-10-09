@@ -8,6 +8,11 @@
 #include "layout.h"
 
 namespace DynamicIsland {
+
+namespace Services {
+class ServiceManager;
+}
+
 namespace Overlay {
 
 class IslandWindow {
@@ -21,9 +26,30 @@ public:
 
     void SetState(IslandState state);
     void SetCurrentEvent(EventType eventType);
+    void SetServiceManager(Services::ServiceManager* sm) { m_serviceManager = sm; }
+
+    void UpdateMediaState(const MediaState& state) {
+        if (m_mediaState.title != state.title || m_mediaState.artist != state.artist) {
+            m_marqueeOffset = 0.0f;
+        }
+        m_mediaState = state;
+    }
+    void UpdateTimerState(const TimerState& state) { m_timerState = state; }
+    void UpdateMicState(const MicState& state) { m_micState = state; }
+    void UpdateTransientState(const TransientState& state) { m_transientState = state; }
+
+    MediaState& GetMediaState() { return m_mediaState; }
+    TimerState& GetTimerState() { return m_timerState; }
+    MicState& GetMicState() { return m_micState; }
+    TransientState& GetTransientState() { return m_transientState; }
 
     void TriggerAnimationUpdate();
     void Render();
+
+    void UpdateDimensions();
+    void OnTaskbarOrDisplayChanged();
+    void RegisterHotkeys();
+    void UnregisterHotkeys();
 
     HWND GetHwnd() const { return m_hwnd; }
     IslandState GetState() const { return m_state; }
@@ -36,21 +62,59 @@ private:
     HWND m_hwnd = nullptr;
     IslandState m_state = IslandState::Hidden;
     EventType m_currentEvent = EventType::None;
+    Services::ServiceManager* m_serviceManager = nullptr;
+
+    MediaState m_mediaState;
+    TimerState m_timerState;
+    MicState m_micState;
+    TransientState m_transientState;
 
     std::unique_ptr<Graphics::D2DRenderer> m_renderer;
     Graphics::AnimatedValue m_animWidth{0.0f};
     Graphics::AnimatedValue m_animHeight{32.0f};
     Graphics::AnimatedValue m_animRadius{16.0f};
     Graphics::AnimatedValue m_animOpacity{0.0f};
+    Graphics::AnimatedValue m_crossfadeAlpha{1.0f};
+    Graphics::AnimatedValue m_animScale{1.0f};
+
+    EventType m_prevEvent = EventType::None;
+    TransientState m_prevTransientState;
+    MediaState m_prevMediaState;
+    TimerState m_prevTimerState;
 
     bool m_isHovered = false;
+    float m_waveProgress = 0.0f;
+    float m_marqueeOffset = 0.0f;
+    double m_lastMarqueeTimeMs = 0.0;
+    uint64_t m_currentThumbVersion = 0;
     UINT_PTR m_autoCollapseTimerId = 1001;
     UINT_PTR m_animTimerId = 1002;
+    UINT_PTR m_waveTimerId = 1003;
+    UINT_PTR m_geometryCheckTimerId = 1004;
+
+    Platform::TaskbarInfo m_cachedTaskbar;
+    UINT m_taskbarCreatedMsg = 0;
+    bool m_hotkeysRegistered = false;
+
+    int m_windowX = 0;
+    int m_windowY = 0;
+    int m_windowW = 0;
+    int m_windowH = 0;
+    float m_currentPillX = 0.0f;
+    float m_currentPillY = 0.0f;
+    float m_currentPillW = 0.0f;
+    float m_currentPillH = 0.0f;
+    float m_currentPillR = 0.0f;
+    bool m_isMouseDown = false;
+    int m_mouseDownX = 0;
+    int m_mouseDownY = 0;
 
     void ArmAutoCollapse();
     void DisarmAutoCollapse();
-    void UpdateDimensions();
-    void OnClick(int x, int y);
+    void OnClick(int clientX, int clientY);
+    void CheckTaskbarGeometry();
+    bool IsPointInSquircle(float clientX, float clientY) const;
+    void RenderCompactContent(EventType eventType, float w, float h, float alpha);
 };
 
 } // namespace Overlay
