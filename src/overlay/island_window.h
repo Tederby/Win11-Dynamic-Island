@@ -81,11 +81,25 @@ private:
     UINT m_taskbarCreatedMsg = 0;
     bool m_hotkeysRegistered = false;
 
+    int m_windowX = 0;
+    int m_windowY = 0;
+    int m_windowW = 0;
+    int m_windowH = 0;
+    float m_currentPillX = 0.0f;
+    float m_currentPillY = 0.0f;
+    float m_currentPillW = 0.0f;
+    float m_currentPillH = 0.0f;
+    float m_currentPillR = 0.0f;
+    bool m_isMouseDown = false;
+    int m_mouseDownX = 0;
+    int m_mouseDownY = 0;
+
     void ArmAutoCollapse();
     void DisarmAutoCollapse();
-    void OnClick(int x, int y);
+    void OnClick(int clientX, int clientY);
     void OnRightClick();
     void CheckTaskbarGeometry();
+    bool IsPointInSquircle(float clientX, float clientY) const;
 };
 
 } // namespace Overlay

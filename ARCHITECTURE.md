@@ -47,15 +47,17 @@ This document describes the architectural layout, rendering pipeline, animation 
 ## 2. Window & Direct2D Rendering Pipeline
 
 ### 2.1 Window Topology
-The Dynamic Island UI is hosted within a top-level layered popup window:
-- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED`.
-- **Transparency & Clipping**: Uses `SetLayeredWindowAttributes` with `LWA_ALPHA` and dynamic OS-level squircle region clipping (`SetWindowRgn` with `CreateRoundRectRgn`), completely eliminating colorkey halos, black cutout artifacts, and rectangular window borders.
+The Dynamic Island UI is hosted within a top-level transparent popup window:
+- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW`.
+- **Transparency & Anti-Aliasing**: Uses native DWM client frame extension (`DwmExtendFrameIntoClientArea(hwnd, {-1, -1, -1, -1})`) and Direct2D `D2D1_ANTIALIAS_MODE_PER_PRIMITIVE`, rendering smooth sub-pixel antialiased squircle capsules without 1-bit GDI `SetWindowRgn` staircase artifacts, composition stalls, or colorkey fringing.
 - **Hit-Testing & Controls**:
+  - Non-blocking `WM_NCHITTEST`: Tests cursor against mathematical squircle geometry, returning `HTCLIENT` inside the island and `HTTRANSPARENT` in the transparent margins to pass mouse input seamlessly to background windows/taskbars.
+  - State machine: `WM_LBUTTONDOWN` / `WM_LBUTTONUP` with `SetCapture` / `ReleaseCapture` and DPI-scaled button boundaries.
   - Compact state: Click expands the island into full activity mode.
   - Expanded state:
-    - Media Controls: Previous, Play/Pause, and Next buttons with interactive hit-testing.
+    - Media Controls: Previous, Play/Pause, and Next buttons with DPI-aware hitboxes.
     - Timer Controls: Pause/Resume (`Jeda`/`Lanjut`) and Stop buttons.
-    - Non-button click: Collapses back to compact state.
+    - Content body click: Keeps island open and resets auto-collapse timer without premature dismissal.
   - Right-Click: Cycles through all 9 live and transient scenarios for rapid testing and visual verification.
   - Global Hotkeys: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>1..9, 0</kbd> simulates Media, Timer, Mic, Volume, CapsLock, Power, Bluetooth, Low Battery, Timer Done, and scenario cycling.
   - Hover Tracking: Pauses the 5-second auto-collapse timer while hovered.
@@ -155,7 +157,12 @@ Because Windhawk expects a single monolithic compilation unit (`.wh.cpp`), we us
 This allows standard C++ modern modular practices during development while retaining 100% compatibility with Windhawk's single-file distribution model.
 
 ### 6.1 Windhawk Compiler & Linker Protocol
-- **Linker Libraries (`@compilerOptions`)**: Mod metadata in `src/metadata/mod_header.h` must declare all required Win32 import libraries: `-ld2d1 -ldwrite -lwindowscodecs -luxtheme -lole32 -lshcore -lversion -lgdi32`. Specifically, GDI region clipping APIs (`CreateRoundRectRgn`, `SetWindowRgn`) require `-lgdi32`.
+- **Complete Compiler & Linker Guide**: See [docs/COMPILER_GUIDE.md](docs/COMPILER_GUIDE.md) for full pitfall catalog, WinRT iteration rules, and linker architecture.
+- **Linker Libraries (`@compilerOptions`)**: Mod metadata in `src/metadata/mod_header.h` must declare all 15 required import libraries:
+  `-ld2d1 -ldwrite -lwindowscodecs -luxtheme -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lshcore -lversion -lgdi32 -ldwmapi -luser32 -lshell32 -ladvapi32`.
+  Specifying `@compilerOptions` overrides default linker libraries; omitting `-luser32`, `-lshell32`, `-ladvapi32`, `-loleaut32`, `-lruntimeobject`, or `-ldwmapi` causes undefined symbol errors in `ld.lld`.
+- **Automated Verification**: Always verify builds using `python scripts/verify.py` (or `npm run verify`), which compiles the bundle for both `x86_64` and `i686` targets using Windhawk's native Clang toolchain before deployment.
 - **Windhawk API Fallback Guard (`WH_MOD`)**: The Windhawk engine pre-includes `windhawk_api.h` and defines `WH_MOD`. All mock/fallback declarations in `src/common/defs.h` (`Wh_Log`, `Wh_Get*Setting`) must be strictly guarded with `#ifndef WH_MOD` to prevent language linkage conflicts and redefinition errors.
-- **C++17 Inline Variables**: Global constants in headers (colors, SVG icon paths) must use `inline constexpr` to prevent Clang `-Wunused-const-variable` warnings across compilation units.
+- **C++/WinRT Collection Traversal**: Never use range-based for loops over `IVectorView<T>` or `IVector<T>` due to Clang template deduction limitations on `begin()`. Use index-based traversal (`Size()` / `GetAt(i)`).
+- **Inline Variables**: Global constants in headers (colors, SVG icon paths) must use `inline constexpr` to prevent Clang `-Wunused-const-variable` warnings across compilation units.
 

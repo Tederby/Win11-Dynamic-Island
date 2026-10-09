@@ -126,6 +126,9 @@ bool D2DRenderer::CreateDeviceResources() {
         return false;
     }
 
+    m_renderTarget->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    m_renderTarget->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+
     m_renderTarget->CreateSolidColorBrush(
         D2D1::ColorF(D2D1::ColorF::White),
         m_solidBrush.GetAddressOf()
@@ -248,24 +251,36 @@ void D2DRenderer::DrawStatusDot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F
 void D2DRenderer::DrawEqualizerWaves(D2D1_POINT_2F origin, float height, float progress) {
     if (!m_renderTarget || !m_solidBrush) return;
 
-    // 3 animated equalizer vertical lines
-    m_solidBrush->SetColor(D2D1::ColorF(0.49f, 0.88f, 0.76f, 1.0f)); // Mint green #7ee0c3
+    // Mint green #7ee0c3
+    m_solidBrush->SetColor(D2D1::ColorF(0.49f, 0.88f, 0.76f, 1.0f));
+
+    float centerY = origin.y + height / 2.0f;
+
+    if (progress <= 0.0f) {
+        // Paused state: clean static dots via FillEllipse
+        for (int i = 0; i < 3; ++i) {
+            float cx = origin.x + i * 5.0f + 1.25f;
+            m_renderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, centerY), 1.25f, 1.25f), m_solidBrush.Get());
+        }
+        return;
+    }
 
     float offsets[3] = {
-        static_cast<float>(std::sin(progress * 6.28f) * 0.5f + 0.5f),
-        static_cast<float>(std::sin(progress * 6.28f + 1.25f) * 0.5f + 0.5f),
-        static_cast<float>(std::sin(progress * 6.28f + 2.5f) * 0.5f + 0.5f)
+        static_cast<float>(std::sin(progress * 6.2831853f) * 0.5f + 0.5f),
+        static_cast<float>(std::sin(progress * 6.2831853f + 1.25f) * 0.5f + 0.5f),
+        static_cast<float>(std::sin(progress * 6.2831853f + 2.5f) * 0.5f + 0.5f)
     };
 
     for (int i = 0; i < 3; ++i) {
         float barH = height * (0.3f + 0.7f * offsets[i]);
-        D2D1_RECT_F r = D2D1::RectF(
-            origin.x + i * 4.0f,
-            origin.y + (height - barH) / 2.0f,
-            origin.x + i * 4.0f + 2.0f,
-            origin.y + (height + barH) / 2.0f
+        if (barH < 3.0f) barH = 3.0f;
+        float barW = 2.5f;
+        float barLeft = origin.x + i * 5.0f;
+        D2D1_ROUNDED_RECT r = D2D1::RoundedRect(
+            D2D1::RectF(barLeft, centerY - barH / 2.0f, barLeft + barW, centerY + barH / 2.0f),
+            1.25f, 1.25f
         );
-        m_renderTarget->FillRectangle(r, m_solidBrush.Get());
+        m_renderTarget->FillRoundedRectangle(r, m_solidBrush.Get());
     }
 }
 
@@ -287,6 +302,13 @@ void D2DRenderer::DrawBigText(const std::wstring& text, const D2D1_RECT_F& rect,
 void D2DRenderer::DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius) {
     if (!m_renderTarget) return;
 
+    float bw = bounds.right - bounds.left;
+    float bh = bounds.bottom - bounds.top;
+    float side = (bw < bh) ? bw : bh;
+    float offsetX = bounds.left + (bw - side) / 2.0f;
+    float offsetY = bounds.top + (bh - side) / 2.0f;
+    D2D1_RECT_F squareBounds = D2D1::RectF(offsetX, offsetY, offsetX + side, offsetY + side);
+
     D2D1_GRADIENT_STOP stops[2];
     stops[0].position = 0.0f;
     stops[0].color = D2D1::ColorF(1.0f, 0.478f, 0.722f, 1.0f); // #ff7ab8
@@ -297,11 +319,11 @@ void D2DRenderer::DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius) {
     if (SUCCEEDED(m_renderTarget->CreateGradientStopCollection(stops, 2, stopCollection.GetAddressOf()))) {
         ComPtr<ID2D1LinearGradientBrush> gradBrush;
         D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES gradProps = D2D1::LinearGradientBrushProperties(
-            D2D1::Point2F(bounds.left, bounds.top),
-            D2D1::Point2F(bounds.right, bounds.bottom)
+            D2D1::Point2F(squareBounds.left, squareBounds.top),
+            D2D1::Point2F(squareBounds.right, squareBounds.bottom)
         );
         if (SUCCEEDED(m_renderTarget->CreateLinearGradientBrush(gradProps, stopCollection.Get(), gradBrush.GetAddressOf()))) {
-            D2D1_ROUNDED_RECT r = D2D1::RoundedRect(bounds, cornerRadius, cornerRadius);
+            D2D1_ROUNDED_RECT r = D2D1::RoundedRect(squareBounds, cornerRadius, cornerRadius);
             m_renderTarget->FillRoundedRectangle(r, gradBrush.Get());
         }
     }

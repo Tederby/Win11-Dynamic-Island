@@ -45,8 +45,15 @@ class Bundler:
         with open(canonical_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
+        if_depth = 0
         for line in lines:
             line_str = line.rstrip("\r\n")
+            line_stripped = line_str.lstrip()
+
+            if line_stripped.startswith("#if"):
+                if_depth += 1
+            elif line_stripped.startswith("#endif"):
+                if_depth = max(0, if_depth - 1)
 
             # Pragma once is handled by file tracker
             if PRAGMA_ONCE_REGEX.match(line_str):
@@ -55,11 +62,16 @@ class Bundler:
             # System includes <...>
             sys_match = SYSTEM_INCLUDE_REGEX.match(line_str)
             if sys_match:
-                header = sys_match.group(1).strip()
-                if header not in self.system_includes_set:
-                    self.system_includes_set.add(header)
-                    self.system_includes.append(header)
-                continue
+                if if_depth == 0:
+                    header = sys_match.group(1).strip()
+                    if header not in self.system_includes_set:
+                        self.system_includes_set.add(header)
+                        self.system_includes.append(header)
+                    continue
+                else:
+                    # Inside conditional directive; preserve in place
+                    output_lines.append(line_str)
+                    continue
 
             # Local includes "..."
             local_match = LOCAL_INCLUDE_REGEX.match(line_str)

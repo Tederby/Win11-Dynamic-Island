@@ -129,6 +129,7 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
 
     // Start background monitors
     if (g_settings.enableMedia) g_mediaService->Start();
+    if (g_settings.enableMicStatus || g_settings.enableVolumeHUD) g_audioService->Start();
     if (g_settings.enablePowerHUD) g_powerService->Start();
     if (g_settings.enableCapsLockHUD) g_keyboardService->Start();
     if (g_settings.enableBluetoothHUD) g_bluetoothService->Start();
@@ -148,6 +149,12 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
             if (g_powerService) g_powerService->Poll();
             if (g_keyboardService) g_keyboardService->Poll();
             if (g_mediaService) g_mediaService->Poll();
+            if (g_audioService) {
+                g_audioService->CheckMicUsage();
+                if (g_mediaService && g_mediaService->GetState().isPlaying) {
+                    g_audioService->UpdateLoopback();
+                }
+            }
 
             DWORD now = GetTickCount();
             if (now - g_lastTimerTick >= 1000) {

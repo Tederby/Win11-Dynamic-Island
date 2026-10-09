@@ -2,6 +2,8 @@
 #include "../services/service_manager.h"
 #include "../common/log.h"
 #include "../common/utils.h"
+#include <dwmapi.h>
+#include <windowsx.h>
 
 namespace DynamicIsland {
 namespace Overlay {
@@ -29,7 +31,7 @@ bool IslandWindow::Create() {
     RegisterClassExW(&wc);
 
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         WINDOW_CLASS_NAME,
         L"Win11 Dynamic Island",
         WS_POPUP,
@@ -45,14 +47,9 @@ bool IslandWindow::Create() {
     m_cachedTaskbar = Platform::QueryPrimaryTaskbar();
     m_taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
 
-    // Pure alpha layered window attributes (no colorkey halo or transparent cutout holes)
-    SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
-
-    // Initial squircle clipping
-    HRGN initRgn = CreateRoundRectRgn(0, 0, 401, 201, 33, 33);
-    if (initRgn) {
-        SetWindowRgn(m_hwnd, initRgn, TRUE);
-    }
+    // Hardware-accelerated full DWM transparent composition
+    MARGINS margins = {-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(m_hwnd, &margins);
 
     if (!m_renderer->Initialize(m_hwnd)) {
         LogError(L"Failed to initialize D2D renderer for island window");
@@ -170,7 +167,52 @@ void IslandWindow::DisarmAutoCollapse() {
 
 void IslandWindow::UpdateDimensions() {
     Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
+    m_cachedTaskbar = tb;
     IslandMetrics target = LayoutEngine::CalculateMetrics(m_currentEvent, m_state, tb);
+
+    // Calculate maximum envelope bounds needed for transitions
+    float animW = m_animWidth.GetValue();
+    float animH = m_animHeight.GetValue();
+    float maxW = (target.width > animW) ? target.width : animW;
+    float maxH = (target.height > animH) ? target.height : animH;
+
+    float minCanvasW = Utils::ScaleDpiF(360.0f, tb.dpi);
+    float minCanvasH = Utils::ScaleDpiF(160.0f, tb.dpi);
+    if (maxW < minCanvasW) maxW = minCanvasW;
+    if (maxH < minCanvasH) maxH = minCanvasH;
+
+    int screenWidth = tb.monitorRect.right - tb.monitorRect.left;
+    int centerX = tb.monitorRect.left + screenWidth / 2;
+    if (tb.position == TaskbarPosition::Left || tb.position == TaskbarPosition::Right) {
+        centerX = (tb.workAreaRect.left + tb.workAreaRect.right) / 2;
+    }
+
+    int winW = static_cast<int>(maxW + 8.0f);
+    int winH = static_cast<int>(maxH + 8.0f);
+    int winX = centerX - (winW / 2);
+    int winY = 0;
+
+    if (tb.position == TaskbarPosition::Top) {
+        int topAnchor = (tb.taskbarRect.top >= tb.monitorRect.top) ? tb.taskbarRect.top : tb.monitorRect.top;
+        winY = topAnchor;
+    } else {
+        int bottomAnchor = tb.workAreaRect.bottom;
+        if (tb.position == TaskbarPosition::Bottom && !tb.isAutoHide) {
+            bottomAnchor = tb.taskbarRect.top - 10;
+        } else {
+            bottomAnchor = tb.monitorRect.bottom - 14;
+        }
+        winY = bottomAnchor - winH;
+    }
+
+    if (m_hwnd && (m_windowX != winX || m_windowY != winY || m_windowW != winW || m_windowH != winH)) {
+        m_windowX = winX;
+        m_windowY = winY;
+        m_windowW = winW;
+        m_windowH = winH;
+        SetWindowPos(m_hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_NOACTIVATE | SWP_NOZORDER);
+        m_renderer->Resize(static_cast<UINT>(winW), static_cast<UINT>(winH));
+    }
 
     if (m_animWidth.GetValue() <= 0.0f && target.width > 0.0f) {
         m_animWidth.SnapTo(target.width);
@@ -199,69 +241,32 @@ void IslandWindow::TriggerAnimationUpdate() {
 
     float curW = m_animWidth.GetValue();
     float curH = m_animHeight.GetValue();
+    float curR = m_animRadius.GetValue();
 
     if (curW > 0.0f && curH > 0.0f && m_hwnd) {
-        Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
-        int screenWidth = tb.monitorRect.right - tb.monitorRect.left;
-        int centerX = tb.monitorRect.left + screenWidth / 2;
-        if (tb.position == TaskbarPosition::Left || tb.position == TaskbarPosition::Right) {
-            centerX = (tb.workAreaRect.left + tb.workAreaRect.right) / 2;
-        }
-
-        float curX = static_cast<float>(centerX) - (curW / 2.0f);
-        float curY = 0.0f;
+        Platform::TaskbarInfo tb = m_cachedTaskbar;
+        float pillX = (static_cast<float>(m_windowW) - curW) / 2.0f;
+        float pillY = 0.0f;
 
         if (tb.position == TaskbarPosition::Top) {
-            int topAnchor = (tb.taskbarRect.top >= tb.monitorRect.top) ? tb.taskbarRect.top : tb.monitorRect.top;
             int tbHeight = tb.taskbarRect.bottom - tb.taskbarRect.top;
             if (tbHeight <= 0) tbHeight = 34;
 
             if (m_state == IslandState::Expanded) {
-                curY = static_cast<float>(topAnchor + 3);
+                pillY = 3.0f;
             } else {
-                curY = static_cast<float>(topAnchor) + (static_cast<float>(tbHeight) - curH) / 2.0f;
+                pillY = (static_cast<float>(tbHeight) - curH) / 2.0f;
+                if (pillY < 0.0f) pillY = 0.0f;
             }
         } else {
-            // Anchor at bottom, expand upwards
-            int bottomAnchor = tb.workAreaRect.bottom;
-            if (tb.position == TaskbarPosition::Bottom && !tb.isAutoHide) {
-                bottomAnchor = tb.taskbarRect.top - 10;
-            } else {
-                bottomAnchor = tb.monitorRect.bottom - 14;
-            }
-            curY = static_cast<float>(bottomAnchor) - curH;
+            pillY = static_cast<float>(m_windowH) - curH;
         }
 
-        SetWindowPos(
-            m_hwnd,
-            HWND_TOPMOST,
-            static_cast<int>(curX),
-            static_cast<int>(curY),
-            static_cast<int>(curW > 1.0f ? curW : 1.0f),
-            static_cast<int>(curH > 1.0f ? curH : 1.0f),
-            SWP_NOACTIVATE | SWP_NOZORDER
-        );
-        m_renderer->Resize(static_cast<UINT>(curW), static_cast<UINT>(curH));
-
-        // Dynamically clip window to squircle capsule (eliminates rectangular artifacts)
-        float curR = m_animRadius.GetValue();
-        float curO = m_animOpacity.GetValue();
-
-        int rgnW = static_cast<int>(curW) + 1;
-        int rgnH = static_cast<int>(curH) + 1;
-        int rgnDiameter = static_cast<int>(curR * 2.0f);
-        if (rgnDiameter > rgnH) rgnDiameter = rgnH;
-        if (rgnDiameter > rgnW) rgnDiameter = rgnW;
-        if (rgnDiameter < 2) rgnDiameter = 2;
-
-        HRGN rgn = CreateRoundRectRgn(0, 0, rgnW, rgnH, rgnDiameter, rgnDiameter);
-        if (rgn) {
-            SetWindowRgn(m_hwnd, rgn, TRUE);
-        }
-
-        // Apply smooth window opacity
-        BYTE alpha = static_cast<BYTE>(curO * 255.0f);
-        SetLayeredWindowAttributes(m_hwnd, 0, alpha, LWA_ALPHA);
+        m_currentPillX = pillX;
+        m_currentPillY = pillY;
+        m_currentPillW = curW;
+        m_currentPillH = curH;
+        m_currentPillR = curR;
     }
 
     Render();
@@ -269,10 +274,52 @@ void IslandWindow::TriggerAnimationUpdate() {
     if (!m_animWidth.IsAnimating() && !m_animHeight.IsAnimating() &&
         !m_animRadius.IsAnimating() && !m_animOpacity.IsAnimating()) {
         KillTimer(m_hwnd, m_animTimerId);
+        if (m_state == IslandState::Hidden) {
+            ShowWindow(m_hwnd, SW_HIDE);
+        }
     }
 }
 
-void IslandWindow::OnClick(int x, int y) {
+bool IslandWindow::IsPointInSquircle(float px, float py) const {
+    if (m_animOpacity.GetValue() <= 0.05f) return false;
+
+    float left = m_currentPillX;
+    float top = m_currentPillY;
+    float right = m_currentPillX + m_currentPillW;
+    float bottom = m_currentPillY + m_currentPillH;
+    float r = m_currentPillR;
+
+    if (px < left || px > right || py < top || py > bottom) {
+        return false;
+    }
+
+    if (r <= 0.0f) return true;
+
+    // Inside central rectangle horizontally or vertically
+    if ((px >= left + r && px <= right - r) || (py >= top + r && py <= bottom - r)) {
+        return true;
+    }
+
+    // Determine nearest corner arc center
+    float cx = (px < left + r) ? (left + r) : (right - r);
+    float cy = (py < top + r) ? (top + r) : (bottom - r);
+
+    float dx = px - cx;
+    float dy = py - cy;
+    return (dx * dx + dy * dy) <= (r * r);
+}
+
+void IslandWindow::OnClick(int clientX, int clientY) {
+    float localX = static_cast<float>(clientX) - m_currentPillX;
+    float localY = static_cast<float>(clientY) - m_currentPillY;
+    float w = m_animWidth.GetValue();
+    float h = m_animHeight.GetValue();
+
+    // Verify click is within pill bounds
+    if (localX < 0.0f || localX > w || localY < 0.0f || localY > h) {
+        return;
+    }
+
     if (m_state == IslandState::Compact) {
         if (m_currentEvent == EventType::Media ||
             m_currentEvent == EventType::Timer ||
@@ -283,37 +330,54 @@ void IslandWindow::OnClick(int x, int y) {
     }
 
     if (m_state == IslandState::Expanded) {
-        float w = m_animWidth.GetValue();
-
+        UINT dpi = m_cachedTaskbar.dpi;
         if (m_currentEvent == EventType::Media) {
             float midX = w / 2.0f;
-            if (y >= 95 && y <= 135) {
-                if (x >= midX - 50.0f && x <= midX - 15.0f) {
+            float btnY1 = Utils::ScaleDpiF(98.0f, dpi);
+            float btnY2 = Utils::ScaleDpiF(136.0f, dpi);
+
+            if (localY >= btnY1 && localY <= btnY2) {
+                // Prev button (midX - 48 to midX - 12)
+                float prevX1 = midX - Utils::ScaleDpiF(48.0f, dpi);
+                float prevX2 = midX - Utils::ScaleDpiF(12.0f, dpi);
+                if (localX >= prevX1 && localX <= prevX2) {
                     if (m_serviceManager) m_serviceManager->OnMediaPrev();
                     ArmAutoCollapse();
                     return;
                 }
-                if (x >= midX - 15.0f && x <= midX + 15.0f) {
+
+                // Play / Pause button (midX - 16 to midX + 16)
+                float playX1 = midX - Utils::ScaleDpiF(16.0f, dpi);
+                float playX2 = midX + Utils::ScaleDpiF(16.0f, dpi);
+                if (localX >= playX1 && localX <= playX2) {
                     if (m_serviceManager) m_serviceManager->OnMediaPlayPause();
                     ArmAutoCollapse();
                     return;
                 }
-                if (x >= midX + 15.0f && x <= midX + 50.0f) {
+
+                // Next button (midX + 12 to midX + 48)
+                float nextX1 = midX + Utils::ScaleDpiF(12.0f, dpi);
+                float nextX2 = midX + Utils::ScaleDpiF(48.0f, dpi);
+                if (localX >= nextX1 && localX <= nextX2) {
                     if (m_serviceManager) m_serviceManager->OnMediaNext();
                     ArmAutoCollapse();
                     return;
                 }
             }
         } else if (m_currentEvent == EventType::Timer) {
-            float btnW = 90.0f;
-            float b1Left = (w - btnW * 2.0f - 16.0f) / 2.0f;
-            if (y >= 70 && y <= 108) {
-                if (x >= b1Left && x <= b1Left + btnW) {
+            float btnW = Utils::ScaleDpiF(90.0f, dpi);
+            float btnGap = Utils::ScaleDpiF(16.0f, dpi);
+            float b1Left = (w - btnW * 2.0f - btnGap) / 2.0f;
+            float btnY1 = Utils::ScaleDpiF(70.0f, dpi);
+            float btnY2 = Utils::ScaleDpiF(108.0f, dpi);
+
+            if (localY >= btnY1 && localY <= btnY2) {
+                if (localX >= b1Left && localX <= b1Left + btnW) {
                     if (m_serviceManager) m_serviceManager->OnTimerTogglePause();
                     ArmAutoCollapse();
                     return;
                 }
-                if (x >= b1Left + btnW + 16.0f && x <= b1Left + btnW * 2.0f + 16.0f) {
+                if (localX >= b1Left + btnW + btnGap && localX <= b1Left + btnW * 2.0f + btnGap) {
                     if (m_serviceManager) m_serviceManager->OnTimerStop();
                     SetState(IslandState::Compact);
                     return;
@@ -321,8 +385,9 @@ void IslandWindow::OnClick(int x, int y) {
             }
         }
 
-        // Clicking outside control buttons collapses back to compact
-        SetState(IslandState::Compact);
+        // Clicking on content body (album art, title, timer digits, empty card background)
+        // keeps the island open and resets the inactivity collapse timer
+        ArmAutoCollapse();
     }
 }
 
@@ -341,13 +406,19 @@ void IslandWindow::Render() {
     float w = m_animWidth.GetValue();
     float h = m_animHeight.GetValue();
     float r = m_animRadius.GetValue();
+    float o = m_animOpacity.GetValue();
 
-    if (w > 0.0f && h > 0.0f) {
+    if (w > 0.0f && h > 0.0f && o > 0.01f) {
+        ID2D1RenderTarget* rt = m_renderer->GetRenderTarget();
+        if (rt) {
+            rt->SetTransform(D2D1::Matrix3x2F::Translation(m_currentPillX, m_currentPillY));
+        }
+
         D2D1_ROUNDED_RECT pill = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, w, h), r, r);
 
-        // Solid dark background and subtle border for clear visibility on top/bottom taskbars
-        D2D1_COLOR_F bgColor = D2D1::ColorF(0.043f, 0.043f, 0.051f, 1.0f); // #0b0b0d
-        D2D1_COLOR_F borderColor = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.16f);
+        // Solid dark background and subtle border with smooth alpha modulation
+        D2D1_COLOR_F bgColor = D2D1::ColorF(0.043f, 0.043f, 0.051f, 1.0f * o); // #0b0b0d
+        D2D1_COLOR_F borderColor = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.16f * o);
 
         m_renderer->DrawRoundedPill(pill, bgColor, borderColor, 1.0f);
 
@@ -683,6 +754,9 @@ void IslandWindow::Render() {
                     break;
             }
         }
+        if (rt) {
+            rt->SetTransform(D2D1::Matrix3x2F::Identity());
+        }
     }
 
     m_renderer->EndDraw();
@@ -710,6 +784,18 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     }
 
     switch (msg) {
+        case WM_ERASEBKGND:
+            return 1;
+
+        case WM_NCHITTEST: {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            ScreenToClient(hwnd, &pt);
+            if (self->IsPointInSquircle(static_cast<float>(pt.x), static_cast<float>(pt.y))) {
+                return HTCLIENT;
+            }
+            return HTTRANSPARENT;
+        }
+
         case WM_HOTKEY: {
             int hotkeyIdx = static_cast<int>(wParam) - HOTKEY_ID_BASE;
             if (self->m_serviceManager && hotkeyIdx >= 0 && hotkeyIdx <= 9) {
@@ -758,8 +844,27 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             }
             return 0;
 
+        case WM_LBUTTONDOWN:
+            self->m_isMouseDown = true;
+            self->m_mouseDownX = GET_X_LPARAM(lParam);
+            self->m_mouseDownY = GET_Y_LPARAM(lParam);
+            SetCapture(hwnd);
+            return 0;
+
         case WM_LBUTTONUP:
-            self->OnClick(LOWORD(lParam), HIWORD(lParam));
+            if (self->m_isMouseDown) {
+                self->m_isMouseDown = false;
+                ReleaseCapture();
+                int upX = GET_X_LPARAM(lParam);
+                int upY = GET_Y_LPARAM(lParam);
+                if (std::abs(upX - self->m_mouseDownX) < 10 && std::abs(upY - self->m_mouseDownY) < 10) {
+                    self->OnClick(upX, upY);
+                }
+            }
+            return 0;
+
+        case WM_CAPTURECHANGED:
+            self->m_isMouseDown = false;
             return 0;
 
         case WM_RBUTTONUP:
