@@ -5,6 +5,7 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 #include <string>
+#include <vector>
 #include "../common/defs.h"
 
 #include "icons.h"
@@ -38,6 +39,9 @@ public:
     void DrawStatusDot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color);
     void DrawEqualizerWaves(D2D1_POINT_2F origin, float height, float progress);
     void DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius);
+    void SetAlbumArtBitmap(const uint8_t* pixels, UINT width, UINT height);
+    void ClearAlbumArtBitmap();
+    bool HasAlbumArtBitmap() const { return m_albumArtBitmap != nullptr; }
     void DrawIconImage(IconType type, const D2D1_RECT_F& bounds, D2D1_COLOR_F color);
     void DrawButtonPill(const D2D1_RECT_F& bounds, const std::wstring& text, bool isHovered);
     void DrawCircularButton(const D2D1_RECT_F& bounds, IconType icon, bool isHovered);
@@ -52,6 +56,7 @@ private:
     ComPtr<IDWriteFactory> m_dwriteFactory;
     ComPtr<ID2D1DCRenderTarget> m_dcRenderTarget;
     ComPtr<ID2D1SolidColorBrush> m_solidBrush;
+    ComPtr<ID2D1Bitmap> m_albumArtBitmap;
     ComPtr<IDWriteTextFormat> m_textFormatRegular;
     ComPtr<IDWriteTextFormat> m_textFormatBold;
     ComPtr<IDWriteTextFormat> m_textFormatBig;
@@ -63,6 +68,17 @@ private:
     void* m_pixelBits = nullptr;
     UINT m_width = 0;
     UINT m_height = 0;
+
+    struct CachedMarquee {
+        std::wstring text;
+        bool bold = false;
+        float targetHeight = 0.0f;
+        ComPtr<IDWriteTextLayout> layout;
+        ComPtr<IDWriteTextLayout> loopLayout;
+        float textWidth = 0.0f;
+        float loopUnitWidth = 0.0f;
+    };
+    std::vector<CachedMarquee> m_marqueeCache;
 
     bool CreateDeviceResources();
     void DiscardDeviceResources();

@@ -39,6 +39,7 @@ public:
 
     void UpdateMediaState(const MediaState& state);
     void UpdateTimerState(const TimerState& state);
+    bool GetMediaThumbnail(std::vector<uint8_t>& pixels, uint32_t& width, uint32_t& height, uint64_t& version);
 
     // Interactive button actions from expanded Island
     void OnMediaPlayPause();

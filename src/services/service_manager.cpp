@@ -54,7 +54,9 @@ void ServiceManager::PostTransientEvent(const QueuedEvent& event) {
 
             m_window->UpdateTransientState(ts);
             m_window->SetCurrentEvent(event.type);
-            m_window->SetState(IslandState::Compact);
+            if (m_window->GetState() != IslandState::Expanded) {
+                m_window->SetState(IslandState::Compact);
+            }
         }
         return;
     }
@@ -66,10 +68,11 @@ void ServiceManager::PostTransientEvent(const QueuedEvent& event) {
 }
 
 void ServiceManager::SetLiveActivity(EventType type, bool active) {
+    bool stateChanged = false;
     switch (type) {
-        case EventType::Media:     m_mediaActive = active; break;
-        case EventType::Timer:     m_timerActive = active; break;
-        case EventType::MicStatus: m_micActive = active; break;
+        case EventType::Media:     if (m_mediaActive != active) { m_mediaActive = active; stateChanged = true; } break;
+        case EventType::Timer:     if (m_timerActive != active) { m_timerActive = active; stateChanged = true; } break;
+        case EventType::MicStatus: if (m_micActive != active)   { m_micActive = active;   stateChanged = true; } break;
         default: break;
     }
 
@@ -77,13 +80,19 @@ void ServiceManager::SetLiveActivity(EventType type, bool active) {
         EventType current = ResolveCurrentLiveActivity();
         if (current != EventType::None) {
             m_window->SetCurrentEvent(current);
-            m_window->SetState(IslandState::Compact);
+            if (m_window->GetState() != IslandState::Expanded) {
+                m_window->SetState(IslandState::Compact);
+            }
         } else {
             if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
                 m_window->SetCurrentEvent(EventType::None);
-                m_window->SetState(IslandState::Compact);
+                if (m_window->GetState() != IslandState::Expanded) {
+                    m_window->SetState(IslandState::Compact);
+                }
             } else {
-                m_window->SetState(IslandState::Hidden);
+                if (m_window->GetState() != IslandState::Expanded) {
+                    m_window->SetState(IslandState::Hidden);
+                }
             }
         }
     }
@@ -96,11 +105,15 @@ void ServiceManager::PumpNextEvent() {
             EventType live = ResolveCurrentLiveActivity();
             if (live != EventType::None) {
                 m_window->SetCurrentEvent(live);
-                m_window->SetState(IslandState::Compact);
+                if (m_window->GetState() != IslandState::Expanded) {
+                    m_window->SetState(IslandState::Compact);
+                }
             } else {
                 if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
                     m_window->SetCurrentEvent(EventType::None);
-                    m_window->SetState(IslandState::Compact);
+                    if (m_window->GetState() != IslandState::Expanded) {
+                        m_window->SetState(IslandState::Compact);
+                    }
                 } else {
                     m_window->SetState(IslandState::Hidden);
                 }
@@ -124,8 +137,17 @@ void ServiceManager::PumpNextEvent() {
 
         m_window->UpdateTransientState(ts);
         m_window->SetCurrentEvent(m_currentTransient.type);
-        m_window->SetState(IslandState::Compact);
+        if (m_window->GetState() != IslandState::Expanded) {
+            m_window->SetState(IslandState::Compact);
+        }
     }
+}
+
+bool ServiceManager::GetMediaThumbnail(std::vector<uint8_t>& pixels, uint32_t& width, uint32_t& height, uint64_t& version) {
+    if (m_mediaService) {
+        return m_mediaService->CopyThumbnail(pixels, width, height, version);
+    }
+    return false;
 }
 
 void ServiceManager::Update() {
@@ -319,13 +341,19 @@ void ServiceManager::RefreshVisibility() {
         EventType current = ResolveCurrentLiveActivity();
         if (current != EventType::None) {
             m_window->SetCurrentEvent(current);
-            m_window->SetState(IslandState::Compact);
+            if (m_window->GetState() != IslandState::Expanded) {
+                m_window->SetState(IslandState::Compact);
+            }
         } else {
             if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible) {
                 m_window->SetCurrentEvent(EventType::None);
-                m_window->SetState(IslandState::Compact);
+                if (m_window->GetState() != IslandState::Expanded) {
+                    m_window->SetState(IslandState::Compact);
+                }
             } else {
-                m_window->SetState(IslandState::Hidden);
+                if (m_window->GetState() != IslandState::Expanded) {
+                    m_window->SetState(IslandState::Hidden);
+                }
             }
         }
     }

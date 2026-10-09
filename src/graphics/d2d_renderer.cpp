@@ -133,12 +133,14 @@ bool D2DRenderer::CreateDeviceResources() {
 }
 
 void D2DRenderer::DiscardDeviceResources() {
+    m_albumArtBitmap.Reset();
     m_solidBrush.Reset();
     m_dcRenderTarget.Reset();
 }
 
 void D2DRenderer::Cleanup() {
     DiscardDeviceResources();
+    m_marqueeCache.clear();
     if (m_hOldBitmap && m_memDC) {
         SelectObject(m_memDC, m_hOldBitmap);
         m_hOldBitmap = nullptr;
@@ -285,47 +287,99 @@ void D2DRenderer::DrawTextString(const std::wstring& text, const D2D1_RECT_F& re
 }
 
 void D2DRenderer::DrawMarqueeText(const std::wstring& text, const D2D1_RECT_F& rect, D2D1_COLOR_F color, float offset, bool bold) {
-    if (!m_dcRenderTarget || !m_solidBrush || !m_dwriteFactory) return;
+    if (!m_dcRenderTarget || !m_solidBrush || !m_dwriteFactory || text.empty()) return;
 
     IDWriteTextFormat* format = bold ? m_textFormatBold.Get() : m_textFormatRegular.Get();
     if (!format) return;
 
     float availW = rect.right - rect.left;
-    if (availW <= 0.0f) return;
+    float availH = rect.bottom - rect.top;
+    if (availW <= 0.0f || availH <= 0.0f) return;
 
-    ComPtr<IDWriteTextLayout> layout;
-    HRESULT hr = m_dwriteFactory->CreateTextLayout(
-        text.c_str(),
-        static_cast<UINT32>(text.length()),
-        format,
-        10000.0f,
-        rect.bottom - rect.top,
-        layout.GetAddressOf()
-    );
-    if (FAILED(hr) || !layout) {
+    // Look up in layout cache to avoid expensive CreateTextLayout calls on every frame
+    CachedMarquee* found = nullptr;
+    for (auto& item : m_marqueeCache) {
+        if (item.text == text && item.bold == bold && std::abs(item.targetHeight - availH) < 0.5f) {
+            found = &item;
+            break;
+        }
+    }
+
+    if (!found) {
+        CachedMarquee newItem;
+        newItem.text = text;
+        newItem.bold = bold;
+        newItem.targetHeight = availH;
+
+        HRESULT hr = m_dwriteFactory->CreateTextLayout(
+            text.c_str(),
+            static_cast<UINT32>(text.length()),
+            format,
+            10000.0f,
+            availH,
+            newItem.layout.GetAddressOf()
+        );
+        if (SUCCEEDED(hr) && newItem.layout) {
+            DWRITE_TEXT_METRICS tm;
+            newItem.layout->GetMetrics(&tm);
+            newItem.textWidth = tm.width;
+        }
+
+        std::wstring loopText = text + L"    \x2022    ";
+        hr = m_dwriteFactory->CreateTextLayout(
+            loopText.c_str(),
+            static_cast<UINT32>(loopText.length()),
+            format,
+            10000.0f,
+            availH,
+            newItem.loopLayout.GetAddressOf()
+        );
+        if (SUCCEEDED(hr) && newItem.loopLayout) {
+            DWRITE_TEXT_METRICS loopMetrics;
+            newItem.loopLayout->GetMetrics(&loopMetrics);
+            newItem.loopUnitWidth = loopMetrics.width;
+        }
+
+        if (m_marqueeCache.size() >= 8) {
+            m_marqueeCache.erase(m_marqueeCache.begin());
+        }
+        m_marqueeCache.push_back(std::move(newItem));
+        found = &m_marqueeCache.back();
+    }
+
+    if (!found || !found->layout) {
         DrawTextString(text, rect, color, 12.0f, bold);
         return;
     }
 
-    DWRITE_TEXT_METRICS tm;
-    layout->GetMetrics(&tm);
-
     m_dcRenderTarget->PushAxisAlignedClip(rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     m_solidBrush->SetColor(color);
 
-    if (tm.width <= availW) {
+    if (found->textWidth <= availW) {
         m_dcRenderTarget->DrawTextLayout(
             D2D1::Point2F(rect.left, rect.top),
-            layout.Get(),
+            found->layout.Get(),
+            m_solidBrush.Get()
+        );
+    } else if (found->loopLayout && found->loopUnitWidth > 0.0f) {
+        float unitWidth = found->loopUnitWidth;
+        float shift = std::fmod(offset, unitWidth);
+        if (shift < 0.0f) shift += unitWidth;
+
+        m_dcRenderTarget->DrawTextLayout(
+            D2D1::Point2F(rect.left - shift, rect.top),
+            found->loopLayout.Get(),
+            m_solidBrush.Get()
+        );
+        m_dcRenderTarget->DrawTextLayout(
+            D2D1::Point2F(rect.left - shift + unitWidth, rect.top),
+            found->loopLayout.Get(),
             m_solidBrush.Get()
         );
     } else {
-        float scrollRange = tm.width - availW + 36.0f;
-        float shift = std::fmod(offset, scrollRange + 40.0f);
-        if (shift > scrollRange) shift = scrollRange;
         m_dcRenderTarget->DrawTextLayout(
-            D2D1::Point2F(rect.left - shift, rect.top),
-            layout.Get(),
+            D2D1::Point2F(rect.left, rect.top),
+            found->layout.Get(),
             m_solidBrush.Get()
         );
     }
@@ -424,6 +478,29 @@ void D2DRenderer::DrawBigText(const std::wstring& text, const D2D1_RECT_F& rect,
     );
 }
 
+void D2DRenderer::SetAlbumArtBitmap(const uint8_t* pixels, UINT width, UINT height) {
+    if (!pixels || width == 0 || height == 0) {
+        ClearAlbumArtBitmap();
+        return;
+    }
+    CreateDeviceResources();
+    if (!m_dcRenderTarget) return;
+
+    D2D1_BITMAP_PROPERTIES props = D2D1::BitmapProperties(
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
+    );
+    D2D1_SIZE_U size = D2D1::SizeU(width, height);
+    m_albumArtBitmap.Reset();
+    HRESULT hr = m_dcRenderTarget->CreateBitmap(size, pixels, width * 4, props, m_albumArtBitmap.GetAddressOf());
+    if (FAILED(hr)) {
+        m_albumArtBitmap.Reset();
+    }
+}
+
+void D2DRenderer::ClearAlbumArtBitmap() {
+    m_albumArtBitmap.Reset();
+}
+
 void D2DRenderer::DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius) {
     if (!m_dcRenderTarget) return;
 
@@ -434,6 +511,33 @@ void D2DRenderer::DrawAlbumArt(const D2D1_RECT_F& bounds, float cornerRadius) {
     float offsetY = bounds.top + (bh - side) / 2.0f;
     D2D1_RECT_F squareBounds = D2D1::RectF(offsetX, offsetY, offsetX + side, offsetY + side);
 
+    if (m_albumArtBitmap) {
+        D2D1_SIZE_F bmpSize = m_albumArtBitmap->GetSize();
+        if (bmpSize.width > 0.0f && bmpSize.height > 0.0f) {
+            float scaleW = side / bmpSize.width;
+            float scaleH = side / bmpSize.height;
+            float scale = (scaleW > scaleH) ? scaleW : scaleH;
+            float scaledW = bmpSize.width * scale;
+            float scaledH = bmpSize.height * scale;
+            float tx = offsetX + (side - scaledW) / 2.0f;
+            float ty = offsetY + (side - scaledH) / 2.0f;
+
+            ComPtr<ID2D1BitmapBrush> brush;
+            D2D1_BITMAP_BRUSH_PROPERTIES brushProps = D2D1::BitmapBrushProperties(
+                D2D1_EXTEND_MODE_CLAMP,
+                D2D1_EXTEND_MODE_CLAMP,
+                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+            );
+            if (SUCCEEDED(m_dcRenderTarget->CreateBitmapBrush(m_albumArtBitmap.Get(), brushProps, brush.GetAddressOf()))) {
+                brush->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale) * D2D1::Matrix3x2F::Translation(tx, ty));
+                D2D1_ROUNDED_RECT r = D2D1::RoundedRect(squareBounds, cornerRadius, cornerRadius);
+                m_dcRenderTarget->FillRoundedRectangle(r, brush.Get());
+                return;
+            }
+        }
+    }
+
+    // Dynamic gradient fallback (#ff7ab8 -> #6a5cff)
     D2D1_GRADIENT_STOP stops[2];
     stops[0].position = 0.0f;
     stops[0].color = D2D1::ColorF(1.0f, 0.478f, 0.722f, 1.0f); // #ff7ab8

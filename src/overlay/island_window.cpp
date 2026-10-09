@@ -52,8 +52,8 @@ bool IslandWindow::Create() {
         return false;
     }
 
-    // Timer for equalizer wave and marquee animation ticks
-    SetTimer(m_hwnd, m_waveTimerId, 40, nullptr);
+    // Timer for equalizer wave and marquee animation ticks (smooth 60 FPS: 16ms)
+    SetTimer(m_hwnd, m_waveTimerId, 16, nullptr);
 
     // Periodic timer for taskbar geometry polling (every 500ms)
     SetTimer(m_hwnd, m_geometryCheckTimerId, 500, nullptr);
@@ -124,11 +124,18 @@ void IslandWindow::CheckTaskbarGeometry() {
         m_cachedTaskbar = tb;
         UpdateDimensions();
     }
+    if (m_hwnd && m_state != IslandState::Hidden) {
+        SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 }
 
 void IslandWindow::Show(bool show) {
     if (m_hwnd) {
-        ShowWindow(m_hwnd, show ? SW_SHOWNOACTIVATE : SW_HIDE);
+        if (show) {
+            SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        } else {
+            ShowWindow(m_hwnd, SW_HIDE);
+        }
     }
 }
 
@@ -151,14 +158,32 @@ void IslandWindow::SetState(IslandState state) {
 }
 
 void IslandWindow::SetCurrentEvent(EventType eventType) {
-    m_currentEvent = eventType;
+    if (m_currentEvent != eventType) {
+        m_prevEvent = m_currentEvent;
+        m_prevTransientState = m_transientState;
+        m_prevMediaState = m_mediaState;
+        m_prevTimerState = m_timerState;
+        m_currentEvent = eventType;
+
+        m_crossfadeAlpha.SnapTo(0.0f);
+        m_crossfadeAlpha.SetTarget(1.0f, 220);
+
+        Platform::TaskbarInfo tb = Platform::QueryPrimaryTaskbar();
+        IslandMetrics oldM = LayoutEngine::CalculateMetrics(m_prevEvent, m_state, tb);
+        IslandMetrics newM = LayoutEngine::CalculateMetrics(m_currentEvent, m_state, tb);
+        if (std::abs(oldM.width - newM.width) < 24.0f) {
+            m_animScale.SnapTo(1.035f);
+            m_animScale.SetTarget(1.0f, 260);
+        }
+    }
     UpdateDimensions();
 }
 
 void IslandWindow::ArmAutoCollapse() {
     if (!m_hwnd) return;
     DisarmAutoCollapse();
-    SetTimer(m_hwnd, m_autoCollapseTimerId, g_settings.autoCollapseSeconds * 1000, nullptr);
+    UINT delayMs = (g_settings.autoCollapseDelayMs > 0) ? static_cast<UINT>(g_settings.autoCollapseDelayMs) : 1500;
+    SetTimer(m_hwnd, m_autoCollapseTimerId, delayMs, nullptr);
 }
 
 void IslandWindow::DisarmAutoCollapse() {
@@ -212,15 +237,25 @@ void IslandWindow::UpdateDimensions() {
         m_windowY = winY;
         m_windowW = winW;
         m_windowH = winH;
-        SetWindowPos(m_hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_NOACTIVATE | SWP_NOZORDER);
+        SetWindowPos(m_hwnd, HWND_TOPMOST, winX, winY, winW, winH, SWP_NOACTIVATE);
         m_renderer->Resize(static_cast<UINT>(winW), static_cast<UINT>(winH));
     }
 
     if (m_animWidth.GetValue() <= 0.0f && target.width > 0.0f) {
-        m_animWidth.SnapTo(target.width);
-        m_animHeight.SnapTo(target.height);
-        m_animRadius.SnapTo(target.cornerRadius);
-        m_animOpacity.SnapTo(1.0f);
+        // Void Entry Animation: smoothly spring open from 0.35 scale and 0 opacity
+        m_animWidth.SnapTo(target.width * 0.35f);
+        m_animHeight.SnapTo(target.height * 0.35f);
+        m_animRadius.SnapTo(target.cornerRadius * 0.35f);
+        m_animOpacity.SnapTo(0.0f);
+
+        m_animWidth.SetTarget(target.width, 450);
+        m_animHeight.SetTarget(target.height, 450);
+        m_animRadius.SetTarget(target.cornerRadius, 450);
+        m_animOpacity.SetTarget(1.0f, 250);
+
+        if (m_hwnd) {
+            SetTimer(m_hwnd, m_animTimerId, 8, nullptr);
+        }
         TriggerAnimationUpdate();
     } else {
         m_animWidth.SetTarget(target.width, 450);
@@ -240,6 +275,8 @@ void IslandWindow::TriggerAnimationUpdate() {
     m_animHeight.Update(now);
     m_animRadius.Update(now);
     m_animOpacity.Update(now);
+    m_crossfadeAlpha.Update(now);
+    m_animScale.Update(now);
 
     float curW = m_animWidth.GetValue();
     float curH = m_animHeight.GetValue();
@@ -274,7 +311,8 @@ void IslandWindow::TriggerAnimationUpdate() {
     Render();
 
     if (!m_animWidth.IsAnimating() && !m_animHeight.IsAnimating() &&
-        !m_animRadius.IsAnimating() && !m_animOpacity.IsAnimating()) {
+        !m_animRadius.IsAnimating() && !m_animOpacity.IsAnimating() &&
+        !m_crossfadeAlpha.IsAnimating() && !m_animScale.IsAnimating()) {
         KillTimer(m_hwnd, m_animTimerId);
         if (m_state == IslandState::Hidden) {
             ShowWindow(m_hwnd, SW_HIDE);
@@ -327,6 +365,10 @@ void IslandWindow::OnClick(int clientX, int clientY) {
             m_currentEvent == EventType::Timer ||
             m_currentEvent == EventType::MicStatus) {
             SetState(IslandState::Expanded);
+            m_isHovered = true;
+            TRACKMOUSEEVENT tme{sizeof(TRACKMOUSEEVENT), TME_LEAVE, m_hwnd, 0};
+            TrackMouseEvent(&tme);
+            ArmAutoCollapse();
         }
         return;
     }
@@ -393,14 +435,285 @@ void IslandWindow::OnClick(int clientX, int clientY) {
     }
 }
 
-void IslandWindow::OnRightClick() {
-    if (m_serviceManager) {
-        m_serviceManager->CycleDemoScenario();
+void IslandWindow::RenderCompactContent(EventType eventType, float w, float h, float alpha) {
+    if (alpha <= 0.005f || !m_renderer) return;
+
+    const TransientState& trState = (eventType == m_prevEvent) ? m_prevTransientState : m_transientState;
+    const MediaState& medState = (eventType == m_prevEvent) ? m_prevMediaState : m_mediaState;
+    const TimerState& timState = (eventType == m_prevEvent) ? m_prevTimerState : m_timerState;
+
+    switch (eventType) {
+        case EventType::Media: {
+            // 18x18 album art with 1:1 cover-crop or gradient fallback
+            D2D1_RECT_F artRect = D2D1::RectF(11.0f, (h - 18.0f) / 2.0f, 29.0f, (h + 18.0f) / 2.0f);
+            m_renderer->DrawAlbumArt(artRect, 5.0f);
+
+            // Track title marquee text
+            std::wstring track = medState.title;
+            if (!medState.artist.empty()) {
+                track += L" \x2022 " + medState.artist;
+            }
+            m_renderer->DrawMarqueeText(
+                track,
+                D2D1::RectF(35.0f, (h - 16.0f) / 2.0f, w - 32.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                medState.isPlaying ? m_marqueeOffset : 0.0f,
+                false
+            );
+
+            // Animated mint green 3-bar equalizer wave
+            m_renderer->DrawEqualizerWaves(
+                D2D1::Point2F(w - 24.0f, (h - 12.0f) / 2.0f),
+                12.0f,
+                medState.isPlaying ? m_waveProgress : 0.0f
+            );
+            break;
+        }
+
+        case EventType::Timer: {
+            float fraction = timState.totalSeconds > 0
+                ? (1.0f - static_cast<float>(timState.remainingSeconds) / static_cast<float>(timState.totalSeconds))
+                : 0.0f;
+
+            m_renderer->DrawProgressRing(
+                D2D1::Point2F(19.0f, h / 2.0f),
+                6.0f,
+                fraction,
+                D2D1::ColorF(1.0f, 0.624f, 0.039f, alpha),
+                2.0f
+            );
+
+            m_renderer->DrawTextString(
+                Utils::FormatDuration(timState.remainingSeconds),
+                D2D1::RectF(32.0f, (h - 16.0f) / 2.0f, w - 54.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+
+            m_renderer->DrawTextString(
+                timState.label,
+                D2D1::RectF(w - 52.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(0.66f, 0.67f, 0.71f, alpha),
+                12.0f,
+                false
+            );
+            break;
+        }
+
+        case EventType::MicStatus: {
+            m_renderer->DrawStatusDot(
+                D2D1::Point2F(19.0f, h / 2.0f),
+                4.0f,
+                D2D1::ColorF(1.0f, 0.624f, 0.039f, alpha)
+            );
+            m_renderer->DrawTextString(
+                L"Mikrofon aktif",
+                D2D1::RectF(32.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+            break;
+        }
+
+        case EventType::Volume: {
+            D2D1_RECT_F volRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::Volume, volRect, D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha));
+
+            float barLeft = 34.0f;
+            float barRight = w - 42.0f;
+            float frac = trState.progressFraction > 0.0f ? trState.progressFraction : 0.68f;
+            m_renderer->DrawProgressBar(
+                D2D1::RectF(barLeft, (h - 4.0f) / 2.0f, barRight, (h + 4.0f) / 2.0f),
+                frac,
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.20f * alpha),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha)
+            );
+
+            int val = trState.value > 0 ? trState.value : 68;
+            m_renderer->DrawTextString(
+                std::to_wstring(val),
+                D2D1::RectF(w - 36.0f, (h - 16.0f) / 2.0f, w - 8.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
+
+        case EventType::CapsLock: {
+            D2D1_RECT_F capsRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::CapsLock, capsRect, D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha));
+
+            m_renderer->DrawTextString(
+                L"Caps Lock",
+                D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 45.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+
+            std::wstring status = trState.subtitle.empty() ? L"ON" : trState.subtitle;
+            m_renderer->DrawTextString(
+                status,
+                D2D1::RectF(w - 42.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
+
+        case EventType::Power: {
+            D2D1_RECT_F boltRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::Bolt, boltRect, D2D1::ColorF(0.188f, 0.820f, 0.345f, alpha));
+
+            m_renderer->DrawTextString(
+                L"Mengisi daya",
+                D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+
+            int pVal = trState.value > 0 ? trState.value : 62;
+            m_renderer->DrawTextString(
+                std::to_wstring(pVal) + L"%",
+                D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
+
+        case EventType::Bluetooth: {
+            D2D1_RECT_F btRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::Bluetooth, btRect, D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha));
+
+            std::wstring dev = trState.title.empty() ? L"WH-1000XM5" : trState.title;
+            m_renderer->DrawTextString(
+                dev,
+                D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+
+            int bVal = trState.value > 0 ? trState.value : 80;
+            m_renderer->DrawTextString(
+                std::to_wstring(bVal) + L"%",
+                D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
+
+        case EventType::LowBattery: {
+            D2D1_RECT_F batRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::Battery, batRect, D2D1::ColorF(1.0f, 0.271f, 0.227f, alpha));
+
+            m_renderer->DrawTextString(
+                L"Baterai lemah",
+                D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+
+            int lbVal = trState.value > 0 ? trState.value : 15;
+            m_renderer->DrawTextString(
+                std::to_wstring(lbVal) + L"%",
+                D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 0.271f, 0.227f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
+
+        case EventType::TimerDone: {
+            D2D1_RECT_F okRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
+            m_renderer->DrawIconImage(Graphics::IconType::Checkmark, okRect, D2D1::ColorF(0.188f, 0.820f, 0.345f, alpha));
+
+            m_renderer->DrawTextString(
+                L"Timer selesai",
+                D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                false
+            );
+            break;
+        }
+
+        default: {
+            // Minimalist idle digital clock (HH:mm) with mathematical dead-centering
+            SYSTEMTIME st;
+            GetLocalTime(&st);
+            wchar_t timeBuf[16];
+            swprintf_s(timeBuf, L"%02d:%02d", st.wHour, st.wMinute);
+
+            float textW = 34.0f;
+            if (m_renderer->GetDWriteFactory()) {
+                Microsoft::WRL::ComPtr<IDWriteTextFormat> fmt;
+                if (SUCCEEDED(m_renderer->GetDWriteFactory()->CreateTextFormat(
+                    L"Segoe UI Variable", nullptr,
+                    DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                    12.0f, L"en-US", fmt.GetAddressOf()))) {
+                    Microsoft::WRL::ComPtr<IDWriteTextLayout> tLayout;
+                    if (SUCCEEDED(m_renderer->GetDWriteFactory()->CreateTextLayout(
+                        timeBuf, static_cast<UINT32>(wcslen(timeBuf)), fmt.Get(), 1000.0f, h, tLayout.GetAddressOf()))) {
+                        DWRITE_TEXT_METRICS tm;
+                        tLayout->GetMetrics(&tm);
+                        textW = tm.width;
+                    }
+                }
+            }
+
+            // Total element group: Dot (dia: 5px) + Gap (6px) + Text (textW)
+            float groupW = 5.0f + 6.0f + textW;
+            float startX = (w - groupW) / 2.0f;
+            if (startX < 6.0f) startX = 6.0f;
+
+            double now = Graphics::GetHighPrecisionTimeMs();
+            float pulse = 0.70f + 0.30f * static_cast<float>(std::sin(now * 0.003));
+
+            m_renderer->DrawStatusDot(
+                D2D1::Point2F(startX + 2.5f, h / 2.0f),
+                2.5f,
+                D2D1::ColorF(0.49f, 0.88f, 0.76f, pulse * alpha)
+            );
+
+            m_renderer->DrawTextString(
+                timeBuf,
+                D2D1::RectF(startX + 11.0f, (h - 16.0f) / 2.0f, startX + 11.0f + textW + 2.0f, (h + 16.0f) / 2.0f),
+                D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha),
+                12.0f,
+                true
+            );
+            break;
+        }
     }
 }
 
 void IslandWindow::Render() {
     if (!m_renderer) return;
+
+    // Check for updated media thumbnail
+    if (m_serviceManager) {
+        std::vector<uint8_t> thumbPixels;
+        uint32_t thumbW = 0, thumbH = 0;
+        if (m_serviceManager->GetMediaThumbnail(thumbPixels, thumbW, thumbH, m_currentThumbVersion)) {
+            if (!thumbPixels.empty() && thumbW > 0 && thumbH > 0) {
+                m_renderer->SetAlbumArtBitmap(thumbPixels.data(), thumbW, thumbH);
+            } else {
+                m_renderer->ClearAlbumArtBitmap();
+            }
+        }
+    }
 
     m_renderer->BeginDraw();
     m_renderer->Clear(D2D1::ColorF(0, 0, 0, 0.0f));
@@ -413,7 +726,13 @@ void IslandWindow::Render() {
     if (w > 0.0f && h > 0.0f && o > 0.01f) {
         ID2D1RenderTarget* rt = m_renderer->GetRenderTarget();
         if (rt) {
-            rt->SetTransform(D2D1::Matrix3x2F::Translation(m_currentPillX, m_currentPillY));
+            float scale = m_animScale.GetValue();
+            if (std::abs(scale - 1.0f) > 0.001f) {
+                D2D1_POINT_2F center = D2D1::Point2F(m_currentPillX + w / 2.0f, m_currentPillY + h / 2.0f);
+                rt->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale, center) * D2D1::Matrix3x2F::Translation(m_currentPillX, m_currentPillY));
+            } else {
+                rt->SetTransform(D2D1::Matrix3x2F::Translation(m_currentPillX, m_currentPillY));
+            }
         }
 
         D2D1_ROUNDED_RECT pill = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, w, h), r, r);
@@ -425,239 +744,13 @@ void IslandWindow::Render() {
         m_renderer->DrawRoundedPill(pill, bgColor, borderColor, 0.0f);
 
         if (m_state == IslandState::Compact) {
-            switch (m_currentEvent) {
-                case EventType::Media: {
-                    // 18x18 gradient album art
-                    D2D1_RECT_F artRect = D2D1::RectF(11.0f, (h - 18.0f) / 2.0f, 29.0f, (h + 18.0f) / 2.0f);
-                    m_renderer->DrawAlbumArt(artRect, 5.0f);
-
-                    // Track title marquee text
-                    std::wstring track = m_mediaState.title;
-                    if (!m_mediaState.artist.empty()) {
-                        track += L" • " + m_mediaState.artist;
-                    }
-                    m_renderer->DrawMarqueeText(
-                        track,
-                        D2D1::RectF(35.0f, (h - 16.0f) / 2.0f, w - 32.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        m_mediaState.isPlaying ? m_marqueeOffset : 0.0f,
-                        false
-                    );
-
-                    // Animated mint green 3-bar equalizer wave
-                    m_renderer->DrawEqualizerWaves(
-                        D2D1::Point2F(w - 24.0f, (h - 12.0f) / 2.0f),
-                        12.0f,
-                        m_mediaState.isPlaying ? m_waveProgress : 0.0f
-                    );
-                    break;
-                }
-
-                case EventType::Timer: {
-                    float fraction = m_timerState.totalSeconds > 0
-                        ? (1.0f - static_cast<float>(m_timerState.remainingSeconds) / static_cast<float>(m_timerState.totalSeconds))
-                        : 0.0f;
-
-                    // Progress ring arc
-                    m_renderer->DrawProgressRing(
-                        D2D1::Point2F(19.0f, h / 2.0f),
-                        6.0f,
-                        fraction,
-                        D2D1::ColorF(1.0f, 0.624f, 0.039f, 1.0f), // Orange #ff9f0a
-                        2.0f
-                    );
-
-                    // MM:SS countdown
-                    m_renderer->DrawTextString(
-                        Utils::FormatDuration(m_timerState.remainingSeconds),
-                        D2D1::RectF(32.0f, (h - 16.0f) / 2.0f, w - 54.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-
-                    // Muted "Fokus" label
-                    m_renderer->DrawTextString(
-                        m_timerState.label,
-                        D2D1::RectF(w - 52.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(0.66f, 0.67f, 0.71f, 1.0f),
-                        12.0f,
-                        false
-                    );
-                    break;
-                }
-
-                case EventType::MicStatus: {
-                    m_renderer->DrawStatusDot(
-                        D2D1::Point2F(19.0f, h / 2.0f),
-                        4.0f,
-                        D2D1::ColorF(1.0f, 0.624f, 0.039f, 1.0f) // #ff9f0a
-                    );
-                    m_renderer->DrawTextString(
-                        L"Mikrofon aktif",
-                        D2D1::RectF(32.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-                    break;
-                }
-
-                case EventType::Volume: {
-                    D2D1_RECT_F volRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::Volume, volRect, D2D1::ColorF(D2D1::ColorF::White));
-
-                    float barLeft = 34.0f;
-                    float barRight = w - 42.0f;
-                    float frac = m_transientState.progressFraction > 0.0f ? m_transientState.progressFraction : 0.68f;
-                    m_renderer->DrawProgressBar(
-                        D2D1::RectF(barLeft, (h - 4.0f) / 2.0f, barRight, (h + 4.0f) / 2.0f),
-                        frac,
-                        D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.20f),
-                        D2D1::ColorF(D2D1::ColorF::White)
-                    );
-
-                    int val = m_transientState.value > 0 ? m_transientState.value : 68;
-                    m_renderer->DrawTextString(
-                        std::to_wstring(val),
-                        D2D1::RectF(w - 36.0f, (h - 16.0f) / 2.0f, w - 8.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
-
-                case EventType::CapsLock: {
-                    D2D1_RECT_F capsRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::CapsLock, capsRect, D2D1::ColorF(D2D1::ColorF::White));
-
-                    m_renderer->DrawTextString(
-                        L"Caps Lock",
-                        D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 45.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-
-                    std::wstring status = m_transientState.subtitle.empty() ? L"ON" : m_transientState.subtitle;
-                    m_renderer->DrawTextString(
-                        status,
-                        D2D1::RectF(w - 42.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
-
-                case EventType::Power: {
-                    D2D1_RECT_F boltRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::Bolt, boltRect, D2D1::ColorF(0.188f, 0.820f, 0.345f, 1.0f));
-
-                    m_renderer->DrawTextString(
-                        L"Mengisi daya",
-                        D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-
-                    int pVal = m_transientState.value > 0 ? m_transientState.value : 62;
-                    m_renderer->DrawTextString(
-                        std::to_wstring(pVal) + L"%",
-                        D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
-
-                case EventType::Bluetooth: {
-                    D2D1_RECT_F btRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::Bluetooth, btRect, D2D1::ColorF(D2D1::ColorF::White));
-
-                    std::wstring dev = m_transientState.title.empty() ? L"WH-1000XM5" : m_transientState.title;
-                    m_renderer->DrawTextString(
-                        dev,
-                        D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-
-                    int bVal = m_transientState.value > 0 ? m_transientState.value : 80;
-                    m_renderer->DrawTextString(
-                        std::to_wstring(bVal) + L"%",
-                        D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
-
-                case EventType::LowBattery: {
-                    D2D1_RECT_F batRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::Battery, batRect, D2D1::ColorF(1.0f, 0.271f, 0.227f, 1.0f));
-
-                    m_renderer->DrawTextString(
-                        L"Baterai lemah",
-                        D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 50.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-
-                    int lbVal = m_transientState.value > 0 ? m_transientState.value : 15;
-                    m_renderer->DrawTextString(
-                        std::to_wstring(lbVal) + L"%",
-                        D2D1::RectF(w - 46.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(1.0f, 0.271f, 0.227f, 1.0f),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
-
-                case EventType::TimerDone: {
-                    D2D1_RECT_F okRect = D2D1::RectF(12.0f, (h - 15.0f) / 2.0f, 27.0f, (h + 15.0f) / 2.0f);
-                    m_renderer->DrawIconImage(Graphics::IconType::Checkmark, okRect, D2D1::ColorF(0.188f, 0.820f, 0.345f, 1.0f));
-
-                    m_renderer->DrawTextString(
-                        L"Timer selesai",
-                        D2D1::RectF(34.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        false
-                    );
-                    break;
-                }
-
-                default: {
-                    // Minimalist idle digital clock (HH:mm)
-                    SYSTEMTIME st;
-                    GetLocalTime(&st);
-                    wchar_t timeBuf[16];
-                    swprintf_s(timeBuf, L"%02d:%02d", st.wHour, st.wMinute);
-
-                    // Mint green status dot indicator (#7ee0c3)
-                    m_renderer->DrawStatusDot(
-                        D2D1::Point2F(18.0f, h / 2.0f),
-                        3.0f,
-                        D2D1::ColorF(0.49f, 0.88f, 0.76f, 0.9f)
-                    );
-
-                    m_renderer->DrawTextString(
-                        timeBuf,
-                        D2D1::RectF(28.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
-                        D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
-                        true
-                    );
-                    break;
-                }
+            if (m_crossfadeAlpha.IsAnimating() && m_prevEvent != EventType::None && m_prevEvent != m_currentEvent) {
+                float aPrev = (1.0f - m_crossfadeAlpha.GetValue()) * o;
+                float aCur = m_crossfadeAlpha.GetValue() * o;
+                RenderCompactContent(m_prevEvent, w, h, aPrev);
+                RenderCompactContent(m_currentEvent, w, h, aCur);
+            } else {
+                RenderCompactContent(m_currentEvent, w, h, o);
             }
         } else if (m_state == IslandState::Expanded) {
             switch (m_currentEvent) {
@@ -837,6 +930,9 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             self->OnTaskbarOrDisplayChanged();
             return 0;
 
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+
         case WM_TIMER:
             if (wParam == self->m_animTimerId) {
                 self->TriggerAnimationUpdate();
@@ -845,9 +941,16 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     self->SetState(IslandState::Compact);
                 }
             } else if (wParam == self->m_waveTimerId) {
-                self->m_waveProgress += 0.05f;
-                if (self->m_waveProgress > 1.0f) self->m_waveProgress -= 1.0f;
-                self->m_marqueeOffset += 0.8f;
+                double now = Graphics::GetHighPrecisionTimeMs();
+                if (self->m_lastMarqueeTimeMs > 0.0) {
+                    double dt = (now - self->m_lastMarqueeTimeMs) / 1000.0;
+                    if (dt > 0.1) dt = 0.1;
+                    self->m_marqueeOffset += static_cast<float>(dt * 16.0); // smooth, readable 16 px/sec
+                    self->m_waveProgress += static_cast<float>(dt * 1.25);
+                    if (self->m_waveProgress > 1.0f) self->m_waveProgress -= 1.0f;
+                }
+                self->m_lastMarqueeTimeMs = now;
+
                 if (self->m_state != IslandState::Hidden) {
                     self->Render();
                 }
@@ -893,10 +996,6 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         case WM_CAPTURECHANGED:
             self->m_isMouseDown = false;
-            return 0;
-
-        case WM_RBUTTONUP:
-            self->OnRightClick();
             return 0;
 
         case WM_PAINT: {

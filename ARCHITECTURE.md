@@ -54,28 +54,30 @@ The Dynamic Island UI is hosted within a top-level transparent popup window:
 - **Transparency & Anti-Aliasing**: Direct2D per-pixel alpha composition via `ID2D1DCRenderTarget` backed by a 32-bit ARGB DIB section, presented atomically to the DWM compositor via `UpdateLayeredWindow` with `ULW_ALPHA` (`AC_SRC_ALPHA`). Renders smooth sub-pixel antialiased squircle capsules without opaque black overlays, 1-bit GDI `SetWindowRgn` staircase artifacts, composition stalls, or colorkey fringing.
 - **Hit-Testing & Controls**:
   - Non-blocking `WM_NCHITTEST`: Tests cursor against mathematical squircle geometry, returning `HTCLIENT` inside the island and `HTTRANSPARENT` in the transparent margins to pass mouse input seamlessly to background windows/taskbars.
+  - AppBar & Top Taskbar Z-Order: `SetWindowPos(HWND_TOPMOST)` without `SWP_NOZORDER` and `WM_MOUSEACTIVATE` returning `MA_NOACTIVATE` guarantees reliable click interception when docked on top taskbar over `Shell_TrayWnd`.
   - State machine: `WM_LBUTTONDOWN` / `WM_LBUTTONUP` with `SetCapture` / `ReleaseCapture` and DPI-scaled button boundaries.
-  - Compact state: Click expands the island into full activity mode.
+  - Compact state: Click expands the island into full activity mode with immediate hover retention.
   - Expanded state:
     - Media Controls: Previous, Play/Pause, and Next buttons with DPI-aware hitboxes.
     - Timer Controls: Pause/Resume (`Jeda`/`Lanjut`) and Stop buttons.
     - Content body click: Keeps island open and resets auto-collapse timer without premature dismissal.
-  - Right-Click: Cycles through all 9 live and transient scenarios for rapid testing and visual verification.
   - Global Hotkeys: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>1..9, 0</kbd> simulates Media, Timer, Mic, Volume, CapsLock, Power, Bluetooth, Low Battery, Timer Done, and scenario cycling.
-  - Hover Tracking: Pauses the 5-second auto-collapse timer while hovered.
+  - Hover Tracking: Pauses the 1.5-second auto-collapse timer (`autoCollapseDelayMs = 1500`) while hovered.
 
 ### 2.2 Direct2D / DirectWrite Rendering
 - **Factory Creation**: Single-threaded `ID2D1Factory` and shared `IDWriteFactory`.
-- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and character ellipsis trimming, plus smooth horizontal text marquee (`DrawMarqueeText`) for overflowing media titles.
+- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and character ellipsis trimming, plus seamless continuous infinite-loop horizontal marquee (`DrawMarqueeText`) driven strictly by high-precision QPC delta elapsed time at 16 px/s with hardware `IDWriteTextLayout` layout caching at 60 FPS.
+- **Album Art Streaming**: WinRT `IRandomAccessStreamReference` stream retrieved and decoded asynchronously on dedicated background worker thread into 32bpp PBGRA via WIC (`IWICImagingFactory`), presented distortion-free with 1:1 center cover-crop (`object-fit: cover`) via `ID2D1BitmapBrush` in compact (18x18) and expanded (52x52) states, with graceful fallback to dynamic gradient.
 - **Render Target**: `ID2D1DCRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
 - **Draw Call Cycle**:
   1. `BeginDraw()` (Binds 32-bit DIB section memory DC)
   2. `Clear(D2D1::ColorF(0, 0, 0, 0))` (Clear transparent surface)
   3. `DrawRoundedPill()` (Pure pitch-black `#000000` squircle capsule with zero outline stroke)
   4. Context-sensitive elements:
-     - Digital clock (`HH:mm`) in idle compact state
+     - Digital clock (`HH:mm`) dead-centered mathematically with breathing status dot in idle compact state
+     - Album art thumbnail cover-crop or gradient fallback
      - Equalizer bars / Waveform (`DrawEqualizerWaves`) with WASAPI loopback RMS reactivity
-     - Marquee song title & artist (`DrawMarqueeText`)
+     - Continuous wrapping marquee song title & artist (`DrawMarqueeText`)
      - Radial progress ring (`DrawProgressRing`)
      - Battery / Volume progress slider (`DrawProgressBar`)
      - Privacy status dot (`DrawStatusDot`)
@@ -92,11 +94,13 @@ Fluid spring transitions are defined by the cubic-bezier easing curve:
 --spring: cubic-bezier(0.34, 1.3, 0.5, 1);
 ```
 
-### Numerical Evaluation
+### Numerical Evaluation & Motion Dynamics
 `Graphics::EvaluateCubicBezier` implements Newton-Raphson approximation to invert the cubic curve $X(t) = target_x$ in 8 iterations, solving for $t$, and evaluating $Y(t)$. This gives authentic native responsiveness matching modern fluid interfaces:
-- Overshoot on expansion for an organic, bouncy feel.
-- High initial velocity that decelerates smoothly into the target geometry.
-- Independent animated properties for `Width`, `Height`, `CornerRadius`, and `Opacity`.
+- **Void Entry**: Awakening from `Hidden` state animates smoothly from 35% scale and 0% opacity (`scale: 0.35 -> 1.0`, `opacity: 0.0 -> 1.0`).
+- **Same-Size Transitions**: Switching between events of identical or similar size performs two-layer alpha crossfade blending with a subtle tactile micro-pulse punch (`scale: 1.035 -> 1.0`).
+- **Overshoot**: Expansion naturally overshoots for an organic, bouncy feel.
+- **Deceleration**: High initial velocity decelerates smoothly into the target geometry.
+- **Properties**: Independent animated properties for `Width`, `Height`, `CornerRadius`, `Opacity`, `CrossfadeAlpha`, and `Scale`.
 
 ---
 

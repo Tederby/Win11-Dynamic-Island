@@ -41,9 +41,9 @@
 - enableBluetoothHUD: true
   $name: Bluetooth HUD
   $description: Show badge when Bluetooth headphones/devices connect with battery status.
-- autoCollapseSeconds: 5
-  $name: Auto-collapse Delay
-  $description: Seconds of inactivity before an expanded island collapses back to compact view.
+- autoCollapseDelayMs: 1500
+  $name: Auto-collapse Delay (ms)
+  $description: Milliseconds of inactivity after cursor leaves before an expanded island collapses back to compact view (1500ms = 1.5s).
 - animationSpeed: 1.0
   $name: Animation Speed Multiplier
   $description: Adjust speed of spring transition animations (1.0 = default fluid physics).

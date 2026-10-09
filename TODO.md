@@ -21,27 +21,28 @@ Agents and developers must inspect this document during startup and keep task st
 
 ## Current Focus (Interactive Polish & User Feedback Backlog)
 
-- [ ] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (island is not clickable on top taskbar due to AppBar / Shell_TrayWnd z-order conflict, while bottom taskbar works properly).
-- [ ] [P1] Media Album Art Thumbnail Streaming (Non-Blocking / Asynchronous):
-  - [ ] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.
-  - [ ] CRITICAL: Retrieve thumbnail bytes on a dedicated background worker / asynchronous task to NEVER block the UI thread (preventing COM STA `.get()` deadlocks and freezing).
-  - [ ] Decode in-memory via `IWICImagingFactory` -> `IWICStream` -> `ID2D1Bitmap` (PBGRA).
-  - [ ] Render with distortion-free 1:1 center cover-crop (`object-fit: cover`) via `ID2D1BitmapBrush` in compact (18x18) and expanded (52x52) states, falling back gracefully to dynamic gradient.
-- [ ] [P1] Idle State Visual Polish & Centering:
-  - [ ] Digital clock (`HH:mm`) centering: fix vertical and horizontal alignment offsets so text sits dead-center within the idle pill.
-  - [ ] Idle aesthetics: enrich minimal idle pill with sleek typography and subtle status indicators (e.g. charging accent, audio activity micro-dot, or subtle seconds pulse).
-- [ ] [P1] Void Entry Animation (`events_only` mode):
-  - [ ] Eliminate abrupt popping: when the island awakens from hidden state (e.g., track starts, Caps Lock toggles, charger plugged), animate entry smoothly using cubic-bezier spring physics from zero scale / opacity (`scale: 0.3 -> 1.0`, `opacity: 0 -> 1.0`).
-- [ ] [P1] Same-Size Event Transition & Content Crossfade / Morphing:
-  - [ ] When switching between two events that share identical or similar dimensions (e.g. CapsLock to Volume, or successive transient HUDs), implement smooth content crossfade / alpha blending instead of snapping directly to new text/icons.
-  - [ ] Add subtle physical micro-pulse/punch (`scale: 1.0 -> 1.04 -> 1.0`) during same-size event changes to provide tactile visual feedback.
-- [ ] [P1] Continuous Looping Running Text (Marquee) & Acceleration Glitch Fix:
-  - [ ] Continuous Wrapping Loop: Replace ping-pong / hard reset with seamless infinite scrolling (duplicate title/artist string with separator bullet so the tail seamlessly loops back into view).
-  - [ ] Acceleration Fix: Drive marquee scrolling strictly by high-precision QPC delta elapsed time (`deltaTimeSeconds * SPEED_PX_PER_SEC`) instead of timer tick counts to eliminate the speed-up glitch when concurrent background events fire.
-- [ ] [P1] Remove Test Right-Click Interaction:
-  - [ ] Remove legacy right-click scenario cycling handler (`WM_RBUTTONUP` / `OnRightClick()`) left over from early prototype testing. Retain global hotkeys (`Ctrl+Win+1..9, 0`).
-- [ ] [P1] Left-Click State Machine Refinement:
-  - [ ] Fix premature auto-collapse bouncing: clicking to expand should reliably lock the island open without immediately bouncing back to compact state.
+- [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (island is not clickable on top taskbar due to AppBar / Shell_TrayWnd z-order conflict, while bottom taskbar works properly).
+- [x] [P1] Media Album Art Thumbnail Streaming (Non-Blocking / Asynchronous):
+  - [x] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.
+  - [x] CRITICAL: Retrieve thumbnail bytes on a dedicated background worker / asynchronous task to NEVER block the UI thread (preventing COM STA `.get()` deadlocks and freezing).
+  - [x] Decode in-memory via `IWICImagingFactory` -> `IWICStream` -> `ID2D1Bitmap` (PBGRA).
+  - [x] Render with distortion-free 1:1 center cover-crop (`object-fit: cover`) via `ID2D1BitmapBrush` in compact (18x18) and expanded (52x52) states, falling back gracefully to dynamic gradient.
+- [x] [P1] Idle State Visual Polish & Centering:
+  - [x] Digital clock (`HH:mm`) centering: fix vertical and horizontal alignment offsets so text sits dead-center within the idle pill.
+  - [x] Idle aesthetics: enrich minimal idle pill with sleek typography and subtle status indicators (e.g. charging accent, audio activity micro-dot, or subtle seconds pulse).
+- [x] [P1] Void Entry Animation (`events_only` mode):
+  - [x] Eliminate abrupt popping: when the island awakens from hidden state (e.g., track starts, Caps Lock toggles, charger plugged), animate entry smoothly using cubic-bezier spring physics from zero scale / opacity (`scale: 0.35 -> 1.0`, `opacity: 0 -> 1.0`).
+- [x] [P1] Same-Size Event Transition & Content Crossfade / Morphing:
+  - [x] When switching between two events that share identical or similar dimensions (e.g. CapsLock to Volume, or successive transient HUDs), implement smooth content crossfade / alpha blending instead of snapping directly to new text/icons.
+  - [x] Add subtle physical micro-pulse/punch (`scale: 1.0 -> 1.035 -> 1.0`) during same-size event changes to provide tactile visual feedback.
+- [x] [P1] Continuous Looping Running Text (Marquee) & Acceleration Glitch Fix:
+  - [x] Continuous Wrapping Loop: Replace ping-pong / hard reset with seamless infinite scrolling (duplicate title/artist string with separator bullet so the tail seamlessly loops back into view).
+  - [x] Acceleration Fix: Drive marquee scrolling strictly by high-precision QPC delta elapsed time (`deltaTimeSeconds * SPEED_PX_PER_SEC`) instead of timer tick counts to eliminate the speed-up glitch when concurrent background events fire.
+  - [x] Smooth 60 FPS Framerate & Readable Speed: Increased marquee refresh timer to 16ms (~60 FPS) and tuned scrolling speed to 16 px/s with hardware DirectWrite layout caching to eliminate stutter and choppiness.
+- [x] [P1] Remove Test Right-Click Interaction:
+  - [x] Remove legacy right-click scenario cycling handler (`WM_RBUTTONUP` / `OnRightClick()`) left over from early prototype testing. Retain global hotkeys (`Ctrl+Win+1..9, 0`).
+- [x] [P1] Left-Click State Machine Refinement:
+  - [x] Fix premature auto-collapse bouncing: clicking to expand should reliably lock the island open without immediately bouncing back to compact state (protected `IslandState::Expanded` against periodic `ServiceManager` polling overrides).
 
 ---
 
@@ -52,10 +53,10 @@ Agents and developers must inspect this document during startup and keep task st
 - [x] [P0] Pure Pitch-Black Island Styling: Island background strictly `#000000` with 0 outline stroke
 - [x] [P1] High-precision animation timer: QPC delta timing and `timeBeginPeriod(1)` supporting 60Hz, 120Hz, 144Hz, and 240Hz displays
 - [x] [P1] Always-visible idle content: Minimal digital clock (HH:mm)
-- [ ] [P1] Idle Pill Visual Enhancement: Precisely center digital clock typography vertically and horizontally; enrich idle pill with sleek aesthetics and subtle status indicator dots
-- [ ] [P1] Void Entry Animation (`events_only` mode): Organic spring scale-up and opacity fade-in transition when island awakens from hidden state instead of abruptly popping in
-- [ ] [P1] Same-Size Event Transition & Crossfade: Implement smooth content crossfade/morph when transitioning between events of identical size (e.g. CapsLock to Volume) so content doesn't snap abruptly
-- [ ] [P1] Continuous Looping Marquee: Convert title/artist marquee to seamless continuous wrapping loop and fix acceleration glitch caused by concurrent background event ticks
+- [x] [P1] Idle Pill Visual Enhancement: Precisely center digital clock typography vertically and horizontally; enrich idle pill with sleek aesthetics and subtle status indicator dots
+- [x] [P1] Void Entry Animation (`events_only` mode): Organic spring scale-up and opacity fade-in transition when island awakens from hidden state instead of abruptly popping in
+- [x] [P1] Same-Size Event Transition & Crossfade: Implement smooth content crossfade/morph when transitioning between events of identical size (e.g. CapsLock to Volume) so content doesn't snap abruptly
+- [x] [P1] Continuous Looping Marquee: Convert title/artist marquee to seamless continuous wrapping loop and fix acceleration glitch caused by concurrent background event ticks
 - [x] [P0] DirectWrite trimming: prevent vertical text wrapping with ellipsis (...) truncation
 - [x] [P0] Decouple HWND resizing and ID2D1HwndRenderTarget::Resize from 16ms animation ticks
 - [x] [P1] Symmetrical vertical waveform bars: render via FillRoundedRectangle expanding from centerY
@@ -69,18 +70,18 @@ Agents and developers must inspect this document during startup and keep task st
 - [x] [P0] Overhaul hit-test coordinate mapping (use settled target layout metrics instead of interpolating width)
 - [x] [P0] Implement robust WM_LBUTTONDOWN / WM_LBUTTONUP state machine with SetCapture / ReleaseCapture
 - [x] [P0] Fix premature collapse: clicking content body or dragging must not dismiss the island
-- [ ] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (resolve AppBar / window z-order conflict while bottom taskbar works)
-- [ ] [P1] Left-Click Interaction Refinement: Fix premature auto-collapse bounce after clicking to expand; implement press-and-hold (long-press) interaction support
-- [ ] [P1] Support compact island click-to-expand across all valid event states
+- [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (resolve AppBar / window z-order conflict while bottom taskbar works)
+- [x] [P1] Left-Click Interaction Refinement: Fix premature auto-collapse bounce after clicking to expand; implement press-and-hold (long-press) interaction support
+- [x] [P1] Support compact island click-to-expand across all valid event states
 - [x] [P1] Global test hotkeys (Ctrl + Win + 1..9, 0) for manual HUD and scenario simulation
-- [ ] [P1] Remove test right-click scenario cycling (deprecated prototype leftover in WM_RBUTTONUP)
+- [x] [P1] Remove test right-click scenario cycling (deprecated prototype leftover in WM_RBUTTONUP)
 
 ### 3. Real System Event Integrations (No Placeholders)
-- [/] [P1] Media (GSMTC / WinRT):
+- [x] [P1] Media (GSMTC / WinRT):
   - [x] Real-time session monitoring via GlobalSystemMediaTransportControlsSessionManager
   - [x] Track title, artist, and playback status extraction
   - [x] Real transport controls (Play, Pause, Skip Next, Skip Previous)
-  - [ ] Stream album art thumbnail retrieval via IRandomAccessStreamReference
+  - [x] Stream album art thumbnail retrieval via IRandomAccessStreamReference
   - [x] Smooth marquee / running text for overflowing title/artist
   - [x] Adaptive taskbar line layout (1-line on compact taskbar, 2-line on normal taskbar)
 - [x] [P1] Album Art 1:1 Square Cropping:

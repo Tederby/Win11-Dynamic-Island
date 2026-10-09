@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <string>
 #include <memory>
+#include <vector>
 
 // Fallback declarations for syntax checking outside Windhawk environment
 #ifndef WH_MOD
@@ -74,6 +75,13 @@ constexpr DWORD DURATION_LOW_BATT_MS   = 2800;
 constexpr DWORD DURATION_TIMER_DONE_MS = 3200;
 
 // Persistent & Transient state data containers
+struct MediaThumbnail {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    std::vector<uint8_t> pixels; // 32bpp PBGRA
+    uint64_t version = 0;
+};
+
 struct MediaState {
     std::wstring title = L"Senbonzakura";
     std::wstring artist = L"Kurousa-P feat. Hatsune Miku";
@@ -116,7 +124,7 @@ struct ModSettings {
     bool enablePowerHUD = true;
     bool enableBluetoothHUD = true;
     bool enableDebugHotkeys = true;
-    int autoCollapseSeconds = 5;
+    int autoCollapseDelayMs = 1500; // 1.5 seconds default inactivity timeout after hover exit
     float animationSpeed = 1.0f;
 };
 

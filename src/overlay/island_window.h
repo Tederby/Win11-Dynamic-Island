@@ -28,7 +28,12 @@ public:
     void SetCurrentEvent(EventType eventType);
     void SetServiceManager(Services::ServiceManager* sm) { m_serviceManager = sm; }
 
-    void UpdateMediaState(const MediaState& state) { m_mediaState = state; }
+    void UpdateMediaState(const MediaState& state) {
+        if (m_mediaState.title != state.title || m_mediaState.artist != state.artist) {
+            m_marqueeOffset = 0.0f;
+        }
+        m_mediaState = state;
+    }
     void UpdateTimerState(const TimerState& state) { m_timerState = state; }
     void UpdateMicState(const MicState& state) { m_micState = state; }
     void UpdateTransientState(const TransientState& state) { m_transientState = state; }
@@ -69,10 +74,19 @@ private:
     Graphics::AnimatedValue m_animHeight{32.0f};
     Graphics::AnimatedValue m_animRadius{16.0f};
     Graphics::AnimatedValue m_animOpacity{0.0f};
+    Graphics::AnimatedValue m_crossfadeAlpha{1.0f};
+    Graphics::AnimatedValue m_animScale{1.0f};
+
+    EventType m_prevEvent = EventType::None;
+    TransientState m_prevTransientState;
+    MediaState m_prevMediaState;
+    TimerState m_prevTimerState;
 
     bool m_isHovered = false;
     float m_waveProgress = 0.0f;
     float m_marqueeOffset = 0.0f;
+    double m_lastMarqueeTimeMs = 0.0;
+    uint64_t m_currentThumbVersion = 0;
     UINT_PTR m_autoCollapseTimerId = 1001;
     UINT_PTR m_animTimerId = 1002;
     UINT_PTR m_waveTimerId = 1003;
@@ -98,9 +112,9 @@ private:
     void ArmAutoCollapse();
     void DisarmAutoCollapse();
     void OnClick(int clientX, int clientY);
-    void OnRightClick();
     void CheckTaskbarGeometry();
     bool IsPointInSquircle(float clientX, float clientY) const;
+    void RenderCompactContent(EventType eventType, float w, float h, float alpha);
 };
 
 } // namespace Overlay

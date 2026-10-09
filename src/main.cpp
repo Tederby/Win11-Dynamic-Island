@@ -92,9 +92,14 @@ void LoadSettings() {
     g_settings.enablePowerHUD = Wh_GetIntSetting(L"enablePowerHUD") != 0;
     g_settings.enableBluetoothHUD = Wh_GetIntSetting(L"enableBluetoothHUD") != 0;
     g_settings.enableDebugHotkeys = Wh_GetIntSetting(L"enableDebugHotkeys") != 0;
-    g_settings.autoCollapseSeconds = Wh_GetIntSetting(L"autoCollapseSeconds");
-    if (g_settings.autoCollapseSeconds <= 0) {
-        g_settings.autoCollapseSeconds = 5;
+    g_settings.autoCollapseDelayMs = Wh_GetIntSetting(L"autoCollapseDelayMs");
+    if (g_settings.autoCollapseDelayMs <= 0) {
+        int legacySec = Wh_GetIntSetting(L"autoCollapseSeconds");
+        if (legacySec > 0) {
+            g_settings.autoCollapseDelayMs = legacySec * 1000;
+        } else {
+            g_settings.autoCollapseDelayMs = 1500;
+        }
     }
 
     LogInfo(L"Settings loaded successfully");
