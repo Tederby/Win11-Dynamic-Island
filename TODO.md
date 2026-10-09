@@ -19,27 +19,31 @@ Agents and developers must inspect this document during startup and keep task st
 
 ---
 
-## Current Focus (In Progress)
+## Current Focus (Black-Box Testing Critical Fixes)
 
-- [x] [P0] True DWM Per-Pixel Anti-Aliasing: Eliminate 1-bit GDI SetWindowRgn clipping to remove jagged/pixelated island edges, enabling smooth sub-pixel antialiasing via DwmExtendFrameIntoClientArea and non-blocking WM_NCHITTEST passthrough
-- [x] [P0] Decouple window resizing and D2D backbuffer reallocation from animation ticks to eliminate stutter
-- [x] [P0] Overhaul click listener and hit-testing engine (fix jittery hitboxes, prevent accidental collapse, add DPI scaling)
-- [x] [P1] Implement real GSMTC media integration (real track title, artist, playback controls, and timeline)
-- [x] [P1] Implement center-cropped 1:1 square album art/thumbnail renderer (no distortion/squishing for rectangular art)
-- [x] [P1] Implement real-time WASAPI audio loopback visualizer (RMS envelope, circular buffer, symmetrical bars)
-- [x] [P1] Refactor microphone indicator into a transient pop-up HUD on app capture activation (not always visible)
+- [ ] [P0] Fix Fatal Opaque Black Window Overlay (~367x166px): Direct2D background transparency regression caused by unlayered `WS_POPUP` window. Restore true per-pixel alpha composition so no black bounding box covers desktop windows.
+- [ ] [P0] Fix Hidden Island Never Appearing in `events_only` Mode: Ensure `ShowWindow(SW_SHOWNOACTIVATE)` is called whenever a new transient event or live activity arrives, and auto-hides when expired.
+- [ ] [P0] Pure Pitch-Black Island Styling: Squircle background MUST be solid pitch black (`#000000`) with zero border/outline stroke.
+- [ ] [P0] Event Preemption & Interruption: New events must immediately supersede active events of the same category (e.g., Caps Lock Off instantly overrides Caps Lock On without waiting for timeout).
+- [ ] [P1] High Refresh Rate Animation Timing (60 Hz - 240 Hz): Replace jittery 16ms `SetTimer` with high-precision QPC delta timing and `timeBeginPeriod` to support 120Hz-240Hz monitors with fluid physics.
+- [ ] [P1] Always-Visible Idle Content: Populate empty idle pill with minimalist digital clock (HH:mm) or subtle status indicators.
+- [ ] [P1] Media Module Polish & Layout Adaptation:
+  - [ ] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.
+  - [ ] Smooth horizontal marquee / running text for overflowing track title and artist instead of static ellipsis truncation (`...`).
+  - [ ] Adaptive layout: 1 single merged line ("Title • Artist") on compact taskbar; 2 stacked lines on normal taskbar.
+  - [ ] Enhance WASAPI audio visualizer dynamics and bar responsiveness.
 
 ---
 
 ## Task Backlog
 
 ### 1. UI, Direct2D Rendering and Smooth Animations
-- [x] [P0] True DWM Per-Pixel Anti-Aliasing: Eliminate 1-bit GDI SetWindowRgn clipping to remove jagged/pixelated island edges, enabling smooth sub-pixel antialiasing via DwmExtendFrameIntoClientArea and non-blocking WM_NCHITTEST passthrough
-- [x] [P0] Replace colorkey transparency and implement layered alpha squircle rendering
+- [/] [P0] True Per-Pixel Alpha Composition: Eliminate opaque black rectangular backdrop (~367x166px) while maintaining hardware anti-aliasing on squircle edges
+- [ ] [P0] Pure Pitch-Black Island Styling: Island background strictly `#000000` with 0 outline stroke
+- [ ] [P1] High-precision animation timer: QPC delta timing and `timeBeginPeriod(1)` supporting 60Hz, 120Hz, 144Hz, and 240Hz displays
+- [ ] [P1] Always-visible idle content: Minimal digital clock (HH:mm)
 - [x] [P0] DirectWrite trimming: prevent vertical text wrapping with ellipsis (...) truncation
 - [x] [P0] Decouple HWND resizing and ID2D1HwndRenderTarget::Resize from 16ms animation ticks
-- [x] [P0] Eliminate per-frame SetWindowRgn GDI calls during animation to prevent DWM composition stalls
-- [ ] [P1] High-precision animation timer (timeBeginPeriod / multimedia timer / QPC delta timing)
 - [x] [P1] Symmetrical vertical waveform bars: render via FillRoundedRectangle expanding from centerY
 - [x] [P1] Waveform paused state: render clean static dots via FillEllipse instead of flat lines
 - [ ] [P1] Reconcile vector element spacing and control positions with settled layouts
@@ -47,6 +51,7 @@ Agents and developers must inspect this document during startup and keep task st
 - [ ] [P2] High-DPI scaling validation across 100%, 125%, 150%, and 200% display scaling factors
 
 ### 2. Interaction, Hit-Testing and Input Handling
+- [ ] [P0] Event Preemption & Interruption: Superseding events (e.g. Caps Lock On -> Off, Volume changes) immediately replace active HUD without queue delay
 - [x] [P0] Overhaul hit-test coordinate mapping (use settled target layout metrics instead of interpolating width)
 - [x] [P0] Implement robust WM_LBUTTONDOWN / WM_LBUTTONUP state machine with SetCapture / ReleaseCapture
 - [x] [P0] Fix premature collapse: clicking content body or dragging must not dismiss the island
@@ -55,23 +60,23 @@ Agents and developers must inspect this document during startup and keep task st
 - [x] [P1] Context menu / right-click demo scenario cycling
 
 ### 3. Real System Event Integrations (No Placeholders)
-- [x] [P1] Media (GSMTC / WinRT):
+- [/] [P1] Media (GSMTC / WinRT):
   - [x] Real-time session monitoring via GlobalSystemMediaTransportControlsSessionManager
   - [x] Track title, artist, and playback status extraction
   - [x] Real transport controls (Play, Pause, Skip Next, Skip Previous)
   - [ ] Stream album art thumbnail retrieval via IRandomAccessStreamReference
+  - [ ] Smooth marquee / running text for overflowing title/artist
+  - [ ] Adaptive taskbar line layout (1-line on compact taskbar, 2-line on normal taskbar)
 - [x] [P1] Album Art 1:1 Square Cropping:
   - [x] Aspect ratio calculation and center-crop algorithm for rectangular art
   - [x] Distortion-free squircle rendering in compact (18x18) and expanded (48x48) states
-- [x] [P1] Waveform Visualizer & Audio Loopback Engine:
+- [/] [P1] Waveform Visualizer & Audio Loopback Engine:
   - [x] WASAPI audio loopback capture (AUDCLNT_STREAMFLAGS_LOOPBACK on default eRender/eConsole endpoint)
   - [x] Power efficiency gating: capture only runs when media is playing (playing == true) and media UI is visible
   - [ ] Stall watchdog: auto-reconnect WASAPI client if media reports playing but stream receives no data > 5s
   - [x] RMS signal calculation: per-chunk (64 frames) RMS = sqrt(sum(v^2)/N) * 4.0f, clamped to [0.0, 1.0]
   - [x] Attack / Release envelope filter: fast attack 0.7 (punchy beats) and soft release 0.85 (smooth decay)
-  - [ ] Circular buffer history (std::array<float, 48>) with time-delay offset mapping across visualizer bars
-  - [ ] Volume-reactive opacity: dynamic accent brush opacity based on momentary amplitude (0.45f + 0.5f * amp)
-  - [ ] Frame rate synchronizer: maintain ~60 FPS during active playback, throttle down to idle rate when paused
+  - [ ] Enhance visualizer dynamics and responsiveness
 - [x] [P1] Microphone Privacy Event:
   - [x] Transition detection (app starts using microphone) via Registry / CoreAudio capture streams
   - [x] Display as transient pop-up HUD (2.8s timeout) with app name and orange privacy dot
