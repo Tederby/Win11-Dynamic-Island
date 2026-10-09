@@ -18,6 +18,7 @@ ServiceManager::~ServiceManager() {
 }
 
 void ServiceManager::Initialize() {
+    RefreshVisibility();
     LogInfo(L"ServiceManager initialized");
 }
 
@@ -27,6 +28,37 @@ void ServiceManager::Shutdown() {
 }
 
 void ServiceManager::PostTransientEvent(const QueuedEvent& event) {
+    // Event Preemption: If currently displaying an event of the same type,
+    // immediately supersede it without waiting for queue timeout (e.g. Caps Lock toggle, Volume adjustments)
+    if (m_hasActiveTransient && m_currentTransient.type == event.type) {
+        m_currentTransient = event;
+        m_transientExpiryTick = GetTickCount() + event.durationMs;
+
+        // Purge any pending duplicate events of the same category in the queue
+        auto it = m_transientQueue.begin();
+        while (it != m_transientQueue.end()) {
+            if (it->type == event.type) {
+                it = m_transientQueue.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        if (m_window) {
+            TransientState ts;
+            ts.type = event.type;
+            ts.title = event.title;
+            ts.subtitle = event.subtitle;
+            ts.value = event.progressPercent;
+            ts.progressFraction = static_cast<float>(event.progressPercent) / 100.0f;
+
+            m_window->UpdateTransientState(ts);
+            m_window->SetCurrentEvent(event.type);
+            m_window->SetState(IslandState::Compact);
+        }
+        return;
+    }
+
     m_transientQueue.push_back(event);
     if (!m_hasActiveTransient) {
         PumpNextEvent();

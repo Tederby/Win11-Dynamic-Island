@@ -87,7 +87,7 @@ void AudioService::UpdateLoopback() {
                             sum += s * s;
                         }
                         float mean = sum / static_cast<float>(totalSamples);
-                        float rms = std::sqrt(mean) * 3.5f;
+                        float rms = std::sqrt(mean) * 4.2f;
                         if (rms > maxRms) maxRms = rms;
                     }
                 }
@@ -98,11 +98,11 @@ void AudioService::UpdateLoopback() {
         if (maxRms > 1.0f) maxRms = 1.0f;
         m_currentRms = maxRms;
 
-        // Attack (0.7) and Release (0.85) envelope filter
+        // Attack (0.75) and Release (0.82) envelope filter for punchy responsive bounce
         if (m_currentRms > m_smoothedRms) {
-            m_smoothedRms = m_smoothedRms + 0.7f * (m_currentRms - m_smoothedRms);
+            m_smoothedRms = m_smoothedRms + 0.75f * (m_currentRms - m_smoothedRms);
         } else {
-            m_smoothedRms = m_smoothedRms * 0.85f;
+            m_smoothedRms = m_smoothedRms * 0.82f;
         }
     }
 }

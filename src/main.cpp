@@ -137,7 +137,12 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
     // Set polling timer on the island window
     SetTimer(g_islandWindow->GetHwnd(), g_pollTimerId, 200, nullptr);
 
-    g_islandWindow->Show(true);
+    if (g_settings.idleVisibilityMode == IdleVisibilityMode::AlwaysVisible ||
+        g_serviceManager->ResolveCurrentLiveActivity() != EventType::None) {
+        g_islandWindow->Show(true);
+    } else {
+        g_islandWindow->Show(false);
+    }
 
     // Signal initialization ready
     if (g_uiReadyEvent) SetEvent(g_uiReadyEvent);
@@ -207,6 +212,29 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
 
 } // namespace DynamicIsland
 
+namespace DynamicIsland {
+
+static void InitHighPrecisionTimer() {
+    HMODULE hWinmm = GetModuleHandleW(L"winmm.dll");
+    if (!hWinmm) hWinmm = LoadLibraryW(L"winmm.dll");
+    if (hWinmm) {
+        using PFN_timeBeginPeriod = UINT(WINAPI*)(UINT);
+        auto pfn = reinterpret_cast<PFN_timeBeginPeriod>(GetProcAddress(hWinmm, "timeBeginPeriod"));
+        if (pfn) pfn(1);
+    }
+}
+
+static void CleanupHighPrecisionTimer() {
+    HMODULE hWinmm = GetModuleHandleW(L"winmm.dll");
+    if (hWinmm) {
+        using PFN_timeEndPeriod = UINT(WINAPI*)(UINT);
+        auto pfn = reinterpret_cast<PFN_timeEndPeriod>(GetProcAddress(hWinmm, "timeEndPeriod"));
+        if (pfn) pfn(1);
+    }
+}
+
+} // namespace DynamicIsland
+
 // ============================================================================
 // Windhawk Mod Lifecycle Hooks
 // ============================================================================
@@ -214,6 +242,7 @@ static DWORD WINAPI IslandUIThreadProc(LPVOID) {
 BOOL Wh_ModInit() {
     DynamicIsland::LogInfo(L"Initializing Win11 Dynamic Island Mod...");
 
+    DynamicIsland::InitHighPrecisionTimer();
     DynamicIsland::LoadSettings();
 
     DynamicIsland::g_uiReadyEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -254,6 +283,7 @@ void Wh_ModUninit() {
         DynamicIsland::g_uiThread = nullptr;
     }
 
+    DynamicIsland::CleanupHighPrecisionTimer();
     DynamicIsland::LogInfo(L"Win11 Dynamic Island Mod unloaded");
 }
 

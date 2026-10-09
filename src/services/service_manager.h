@@ -52,6 +52,7 @@ public:
     void TriggerTestScenario(int index);
     void FireTransient(EventType type);
     void RefreshVisibility();
+    EventType ResolveCurrentLiveActivity() const;
 
 private:
     Overlay::IslandWindow* m_window = nullptr;
@@ -71,7 +72,6 @@ private:
     std::wstring m_lastTrackTitle;
 
     void PumpNextEvent();
-    EventType ResolveCurrentLiveActivity() const;
 };
 
 } // namespace Services

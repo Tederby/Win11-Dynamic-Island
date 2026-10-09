@@ -31,7 +31,7 @@ bool IslandWindow::Create() {
     RegisterClassExW(&wc);
 
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
         WINDOW_CLASS_NAME,
         L"Win11 Dynamic Island",
         WS_POPUP,
@@ -46,10 +46,6 @@ bool IslandWindow::Create() {
 
     m_cachedTaskbar = Platform::QueryPrimaryTaskbar();
     m_taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
-
-    // Hardware-accelerated full DWM transparent composition
-    MARGINS margins = {-1, -1, -1, -1};
-    DwmExtendFrameIntoClientArea(m_hwnd, &margins);
 
     if (!m_renderer->Initialize(m_hwnd)) {
         LogError(L"Failed to initialize D2D renderer for island window");
@@ -138,7 +134,13 @@ void IslandWindow::Show(bool show) {
 
 void IslandWindow::SetState(IslandState state) {
     if (m_state == state) return;
+    IslandState oldState = m_state;
     m_state = state;
+
+    if (m_state != IslandState::Hidden && oldState == IslandState::Hidden) {
+        Show(true);
+    }
+
     UpdateDimensions();
 
     if (m_state == IslandState::Expanded) {
@@ -227,13 +229,13 @@ void IslandWindow::UpdateDimensions() {
         m_animOpacity.SetTarget(m_state == IslandState::Hidden ? 0.0f : 1.0f, 200);
 
         if (m_hwnd) {
-            SetTimer(m_hwnd, m_animTimerId, 16, nullptr); // ~60fps spring animation tick
+            SetTimer(m_hwnd, m_animTimerId, 8, nullptr); // ~120Hz-240Hz high refresh rate tick
         }
     }
 }
 
 void IslandWindow::TriggerAnimationUpdate() {
-    DWORD now = GetTickCount();
+    double now = Graphics::GetHighPrecisionTimeMs();
     m_animWidth.Update(now);
     m_animHeight.Update(now);
     m_animRadius.Update(now);
@@ -416,11 +418,11 @@ void IslandWindow::Render() {
 
         D2D1_ROUNDED_RECT pill = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, w, h), r, r);
 
-        // Solid dark background and subtle border with smooth alpha modulation
-        D2D1_COLOR_F bgColor = D2D1::ColorF(0.043f, 0.043f, 0.051f, 1.0f * o); // #0b0b0d
-        D2D1_COLOR_F borderColor = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.16f * o);
+        // Pure pitch-black background (#000000) with zero border/outline stroke
+        D2D1_COLOR_F bgColor = D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f * o);
+        D2D1_COLOR_F borderColor = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
 
-        m_renderer->DrawRoundedPill(pill, bgColor, borderColor, 1.0f);
+        m_renderer->DrawRoundedPill(pill, bgColor, borderColor, 0.0f);
 
         if (m_state == IslandState::Compact) {
             switch (m_currentEvent) {
@@ -430,12 +432,15 @@ void IslandWindow::Render() {
                     m_renderer->DrawAlbumArt(artRect, 5.0f);
 
                     // Track title marquee text
-                    std::wstring track = m_mediaState.title + L" - " + m_mediaState.artist;
-                    m_renderer->DrawTextString(
+                    std::wstring track = m_mediaState.title;
+                    if (!m_mediaState.artist.empty()) {
+                        track += L" • " + m_mediaState.artist;
+                    }
+                    m_renderer->DrawMarqueeText(
                         track,
                         D2D1::RectF(35.0f, (h - 16.0f) / 2.0f, w - 32.0f, (h + 16.0f) / 2.0f),
                         D2D1::ColorF(D2D1::ColorF::White),
-                        12.0f,
+                        m_mediaState.isPlaying ? m_marqueeOffset : 0.0f,
                         false
                     );
 
@@ -630,8 +635,29 @@ void IslandWindow::Render() {
                     break;
                 }
 
-                default:
+                default: {
+                    // Minimalist idle digital clock (HH:mm)
+                    SYSTEMTIME st;
+                    GetLocalTime(&st);
+                    wchar_t timeBuf[16];
+                    swprintf_s(timeBuf, L"%02d:%02d", st.wHour, st.wMinute);
+
+                    // Mint green status dot indicator (#7ee0c3)
+                    m_renderer->DrawStatusDot(
+                        D2D1::Point2F(18.0f, h / 2.0f),
+                        3.0f,
+                        D2D1::ColorF(0.49f, 0.88f, 0.76f, 0.9f)
+                    );
+
+                    m_renderer->DrawTextString(
+                        timeBuf,
+                        D2D1::RectF(28.0f, (h - 16.0f) / 2.0f, w - 10.0f, (h + 16.0f) / 2.0f),
+                        D2D1::ColorF(D2D1::ColorF::White),
+                        12.0f,
+                        true
+                    );
                     break;
+                }
             }
         } else if (m_state == IslandState::Expanded) {
             switch (m_currentEvent) {
@@ -640,19 +666,19 @@ void IslandWindow::Render() {
                     D2D1_RECT_F artRect = D2D1::RectF(16.0f, 16.0f, 68.0f, 68.0f);
                     m_renderer->DrawAlbumArt(artRect, 11.0f);
 
-                    // Track title & artist
-                    m_renderer->DrawTextString(
+                    // Track title & artist (with smooth horizontal marquee)
+                    m_renderer->DrawMarqueeText(
                         m_mediaState.title,
                         D2D1::RectF(80.0f, 22.0f, w - 16.0f, 42.0f),
                         D2D1::ColorF(D2D1::ColorF::White),
-                        14.0f,
+                        m_mediaState.isPlaying ? m_marqueeOffset : 0.0f,
                         true
                     );
-                    m_renderer->DrawTextString(
+                    m_renderer->DrawMarqueeText(
                         m_mediaState.artist,
                         D2D1::RectF(80.0f, 44.0f, w - 16.0f, 64.0f),
                         D2D1::ColorF(0.66f, 0.67f, 0.71f, 1.0f),
-                        12.0f,
+                        m_mediaState.isPlaying ? m_marqueeOffset * 0.7f : 0.0f,
                         false
                     );
 
@@ -760,6 +786,7 @@ void IslandWindow::Render() {
     }
 
     m_renderer->EndDraw();
+    m_renderer->PresentLayeredWindow(m_hwnd, m_windowX, m_windowY);
 }
 
 LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -820,6 +847,7 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             } else if (wParam == self->m_waveTimerId) {
                 self->m_waveProgress += 0.05f;
                 if (self->m_waveProgress > 1.0f) self->m_waveProgress -= 1.0f;
+                self->m_marqueeOffset += 0.8f;
                 if (self->m_state != IslandState::Hidden) {
                     self->Render();
                 }

@@ -48,8 +48,8 @@ This document describes the architectural layout, rendering pipeline, animation 
 
 ### 2.1 Window Topology
 The Dynamic Island UI is hosted within a top-level transparent popup window:
-- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_TOPMOST | WS_EX_TOOLWINDOW`.
-- **Transparency & Anti-Aliasing**: Uses native DWM client frame extension (`DwmExtendFrameIntoClientArea(hwnd, {-1, -1, -1, -1})`) and Direct2D `D2D1_ANTIALIAS_MODE_PER_PRIMITIVE`, rendering smooth sub-pixel antialiased squircle capsules without 1-bit GDI `SetWindowRgn` staircase artifacts, composition stalls, or colorkey fringing.
+- **Window Styles**: `WS_POPUP` with extended styles `WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW`.
+- **Transparency & Anti-Aliasing**: Direct2D per-pixel alpha composition via `ID2D1DCRenderTarget` backed by a 32-bit ARGB DIB section, presented atomically to the DWM compositor via `UpdateLayeredWindow` with `ULW_ALPHA` (`AC_SRC_ALPHA`). Renders smooth sub-pixel antialiased squircle capsules without opaque black overlays, 1-bit GDI `SetWindowRgn` staircase artifacts, composition stalls, or colorkey fringing.
 - **Hit-Testing & Controls**:
   - Non-blocking `WM_NCHITTEST`: Tests cursor against mathematical squircle geometry, returning `HTCLIENT` inside the island and `HTTRANSPARENT` in the transparent margins to pass mouse input seamlessly to background windows/taskbars.
   - State machine: `WM_LBUTTONDOWN` / `WM_LBUTTONUP` with `SetCapture` / `ReleaseCapture` and DPI-scaled button boundaries.
@@ -64,19 +64,22 @@ The Dynamic Island UI is hosted within a top-level transparent popup window:
 
 ### 2.2 Direct2D / DirectWrite Rendering
 - **Factory Creation**: Single-threaded `ID2D1Factory` and shared `IDWriteFactory`.
-- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and `CreateEllipsisTrimmingSign` character ellipsis trimming to prevent text clipping and multi-line wrapping collisions.
-- **Render Target**: `ID2D1HwndRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
+- **Text Trimming & Word Wrapping**: Formats configured with `DWRITE_WORD_WRAPPING_NO_WRAP` and character ellipsis trimming, plus smooth horizontal text marquee (`DrawMarqueeText`) for overflowing media titles.
+- **Render Target**: `ID2D1DCRenderTarget` with `DXGI_FORMAT_B8G8R8A8_UNORM` and `D2D1_ALPHA_MODE_PREMULTIPLIED` for clean subpixel text and geometry rendering.
 - **Draw Call Cycle**:
-  1. `BeginDraw()`
+  1. `BeginDraw()` (Binds 32-bit DIB section memory DC)
   2. `Clear(D2D1::ColorF(0, 0, 0, 0))` (Clear transparent surface)
-  3. `DrawRoundedPill()` (Island background capsule with border and corner radius)
+  3. `DrawRoundedPill()` (Pure pitch-black `#000000` squircle capsule with zero outline stroke)
   4. Context-sensitive elements:
-     - Equalizer bars / Waveform (`DrawEqualizerWaves`)
+     - Digital clock (`HH:mm`) in idle compact state
+     - Equalizer bars / Waveform (`DrawEqualizerWaves`) with WASAPI loopback RMS reactivity
+     - Marquee song title & artist (`DrawMarqueeText`)
      - Radial progress ring (`DrawProgressRing`)
      - Battery / Volume progress slider (`DrawProgressBar`)
      - Privacy status dot (`DrawStatusDot`)
      - Text labels via DirectWrite (`Segoe UI Variable`)
   5. `EndDraw()`
+  6. `PresentLayeredWindow()` (`UpdateLayeredWindow` with `ULW_ALPHA`)
 
 ---
 

@@ -37,7 +37,7 @@ IslandMetrics LayoutEngine::CalculateMetrics(
             case EventType::Bluetooth:  defaultWidth = 244.0f; break;
             case EventType::LowBattery: defaultWidth = 196.0f; break;
             case EventType::TimerDone:  defaultWidth = 204.0f; break;
-            default:                    defaultWidth = 180.0f; break;
+            default:                    defaultWidth = 108.0f; break;
         }
 
         if (customWidth > 0) defaultWidth = static_cast<float>(customWidth);

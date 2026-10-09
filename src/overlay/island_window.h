@@ -72,6 +72,7 @@ private:
 
     bool m_isHovered = false;
     float m_waveProgress = 0.0f;
+    float m_marqueeOffset = 0.0f;
     UINT_PTR m_autoCollapseTimerId = 1001;
     UINT_PTR m_animTimerId = 1002;
     UINT_PTR m_waveTimerId = 1003;

@@ -21,27 +21,27 @@ Agents and developers must inspect this document during startup and keep task st
 
 ## Current Focus (Black-Box Testing Critical Fixes)
 
-- [ ] [P0] Fix Fatal Opaque Black Window Overlay (~367x166px): Direct2D background transparency regression caused by unlayered `WS_POPUP` window. Restore true per-pixel alpha composition so no black bounding box covers desktop windows.
-- [ ] [P0] Fix Hidden Island Never Appearing in `events_only` Mode: Ensure `ShowWindow(SW_SHOWNOACTIVATE)` is called whenever a new transient event or live activity arrives, and auto-hides when expired.
-- [ ] [P0] Pure Pitch-Black Island Styling: Squircle background MUST be solid pitch black (`#000000`) with zero border/outline stroke.
-- [ ] [P0] Event Preemption & Interruption: New events must immediately supersede active events of the same category (e.g., Caps Lock Off instantly overrides Caps Lock On without waiting for timeout).
-- [ ] [P1] High Refresh Rate Animation Timing (60 Hz - 240 Hz): Replace jittery 16ms `SetTimer` with high-precision QPC delta timing and `timeBeginPeriod` to support 120Hz-240Hz monitors with fluid physics.
-- [ ] [P1] Always-Visible Idle Content: Populate empty idle pill with minimalist digital clock (HH:mm) or subtle status indicators.
+- [x] [P0] Fix Fatal Opaque Black Window Overlay (~367x166px): Direct2D background transparency regression caused by unlayered `WS_POPUP` window. Restore true per-pixel alpha composition so no black bounding box covers desktop windows.
+- [x] [P0] Fix Hidden Island Never Appearing in `events_only` Mode: Ensure `ShowWindow(SW_SHOWNOACTIVATE)` is called whenever a new transient event or live activity arrives, and auto-hides when expired.
+- [x] [P0] Pure Pitch-Black Island Styling: Squircle background MUST be solid pitch black (`#000000`) with zero border/outline stroke.
+- [x] [P0] Event Preemption & Interruption: New events must immediately supersede active events of the same category (e.g., Caps Lock Off instantly overrides Caps Lock On without waiting for timeout).
+- [x] [P1] High Refresh Rate Animation Timing (60 Hz - 240 Hz): Replace jittery 16ms `SetTimer` with high-precision QPC delta timing and `timeBeginPeriod` to support 120Hz-240Hz monitors with fluid physics.
+- [x] [P1] Always-Visible Idle Content: Populate empty idle pill with minimalist digital clock (HH:mm) or subtle status indicators.
 - [ ] [P1] Media Module Polish & Layout Adaptation:
   - [ ] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.
-  - [ ] Smooth horizontal marquee / running text for overflowing track title and artist instead of static ellipsis truncation (`...`).
-  - [ ] Adaptive layout: 1 single merged line ("Title • Artist") on compact taskbar; 2 stacked lines on normal taskbar.
-  - [ ] Enhance WASAPI audio visualizer dynamics and bar responsiveness.
+  - [x] Smooth horizontal marquee / running text for overflowing track title and artist instead of static ellipsis truncation (`...`).
+  - [x] Adaptive layout: 1 single merged line ("Title • Artist") on compact taskbar; 2 stacked lines on normal taskbar.
+  - [x] Enhance WASAPI audio visualizer dynamics and bar responsiveness.
 
 ---
 
 ## Task Backlog
 
 ### 1. UI, Direct2D Rendering and Smooth Animations
-- [/] [P0] True Per-Pixel Alpha Composition: Eliminate opaque black rectangular backdrop (~367x166px) while maintaining hardware anti-aliasing on squircle edges
-- [ ] [P0] Pure Pitch-Black Island Styling: Island background strictly `#000000` with 0 outline stroke
-- [ ] [P1] High-precision animation timer: QPC delta timing and `timeBeginPeriod(1)` supporting 60Hz, 120Hz, 144Hz, and 240Hz displays
-- [ ] [P1] Always-visible idle content: Minimal digital clock (HH:mm)
+- [x] [P0] True Per-Pixel Alpha Composition: Eliminate opaque black rectangular backdrop (~367x166px) while maintaining hardware anti-aliasing on squircle edges
+- [x] [P0] Pure Pitch-Black Island Styling: Island background strictly `#000000` with 0 outline stroke
+- [x] [P1] High-precision animation timer: QPC delta timing and `timeBeginPeriod(1)` supporting 60Hz, 120Hz, 144Hz, and 240Hz displays
+- [x] [P1] Always-visible idle content: Minimal digital clock (HH:mm)
 - [x] [P0] DirectWrite trimming: prevent vertical text wrapping with ellipsis (...) truncation
 - [x] [P0] Decouple HWND resizing and ID2D1HwndRenderTarget::Resize from 16ms animation ticks
 - [x] [P1] Symmetrical vertical waveform bars: render via FillRoundedRectangle expanding from centerY
@@ -51,7 +51,7 @@ Agents and developers must inspect this document during startup and keep task st
 - [ ] [P2] High-DPI scaling validation across 100%, 125%, 150%, and 200% display scaling factors
 
 ### 2. Interaction, Hit-Testing and Input Handling
-- [ ] [P0] Event Preemption & Interruption: Superseding events (e.g. Caps Lock On -> Off, Volume changes) immediately replace active HUD without queue delay
+- [x] [P0] Event Preemption & Interruption: Superseding events (e.g. Caps Lock On -> Off, Volume changes) immediately replace active HUD without queue delay
 - [x] [P0] Overhaul hit-test coordinate mapping (use settled target layout metrics instead of interpolating width)
 - [x] [P0] Implement robust WM_LBUTTONDOWN / WM_LBUTTONUP state machine with SetCapture / ReleaseCapture
 - [x] [P0] Fix premature collapse: clicking content body or dragging must not dismiss the island
@@ -65,8 +65,8 @@ Agents and developers must inspect this document during startup and keep task st
   - [x] Track title, artist, and playback status extraction
   - [x] Real transport controls (Play, Pause, Skip Next, Skip Previous)
   - [ ] Stream album art thumbnail retrieval via IRandomAccessStreamReference
-  - [ ] Smooth marquee / running text for overflowing title/artist
-  - [ ] Adaptive taskbar line layout (1-line on compact taskbar, 2-line on normal taskbar)
+  - [x] Smooth marquee / running text for overflowing title/artist
+  - [x] Adaptive taskbar line layout (1-line on compact taskbar, 2-line on normal taskbar)
 - [x] [P1] Album Art 1:1 Square Cropping:
   - [x] Aspect ratio calculation and center-crop algorithm for rectangular art
   - [x] Distortion-free squircle rendering in compact (18x18) and expanded (48x48) states
