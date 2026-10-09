@@ -300,7 +300,7 @@ void ServiceManager::RefreshVisibility() {
 }
 
 EventType ServiceManager::ResolveCurrentLiveActivity() const {
-    // Priority order matching prototype.html: mic > timer > media
+    // Priority order: mic > timer > media
     if (m_micActive)   return EventType::MicStatus;
     if (m_timerActive) return EventType::Timer;
     if (m_mediaActive) return EventType::Media;

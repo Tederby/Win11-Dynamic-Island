@@ -7,7 +7,7 @@
 namespace DynamicIsland {
 namespace Graphics {
 
-// Icon identifiers corresponding to the SVG paths in prototype.html
+// Icon identifiers corresponding to vector icon assets
 enum class IconType {
     Play,
     Pause,
@@ -21,7 +21,7 @@ enum class IconType {
     Checkmark
 };
 
-// SVG path definitions from prototype.html
+// SVG path definitions for Direct2D icon geometry
 namespace IconPaths {
     inline constexpr const char* PLAY      = "M8 5v14l11-7z";
     inline constexpr const char* PAUSE     = "M6 5h4v14H6zm8 0h4v14h-4z";

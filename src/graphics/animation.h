@@ -7,7 +7,7 @@ namespace DynamicIsland {
 namespace Graphics {
 
 // Evaluates cubic-bezier(x1, y1, x2, y2) for parameter t in [0, 1]
-// The prototype uses cubic-bezier(0.34, 1.3, 0.5, 1.0)
+// Standard spring curve uses cubic-bezier(0.34, 1.3, 0.5, 1.0)
 float EvaluateCubicBezier(float x1, float y1, float x2, float y2, float t);
 
 // Spring animation property animator

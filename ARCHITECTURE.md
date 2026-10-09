@@ -80,7 +80,7 @@ The Dynamic Island UI is hosted within a top-level layered popup window:
 
 ## 3. Animation Engine: Spring Physics & Easing
 
-In [`prototype.html`](prototype.html), fluid spring transitions are defined by:
+Fluid spring transitions are defined by the cubic-bezier easing curve:
 ```css
 --spring: cubic-bezier(0.34, 1.3, 0.5, 1);
 ```

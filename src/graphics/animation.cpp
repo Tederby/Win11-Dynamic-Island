@@ -61,7 +61,7 @@ void AnimatedValue::Update(DWORD currentTimeMs) {
     }
 
     float linearProgress = static_cast<float>(currentTimeMs - m_startTime) / static_cast<float>(m_durationMs);
-    // Cubic bezier used in CSS prototype: cubic-bezier(.34, 1.3, .5, 1)
+    // Spring easing curve: cubic-bezier(.34, 1.3, .5, 1)
     float curvedProgress = EvaluateCubicBezier(0.34f, 1.3f, 0.5f, 1.0f, linearProgress);
     m_current = m_start + (m_target - m_start) * curvedProgress;
 }

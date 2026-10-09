@@ -75,16 +75,6 @@ Agents and developers must inspect this document during startup and keep task st
 - [ ] [P2] Memory footprint check (ensure Direct2D resources and WinRT objects are released properly on shutdown)
 - [ ] [P2] Prevent UI thread stutter or frame drops during rapid system notifications
 
----
-
-## User Notes and Scratchpad
-
-<!-- Paste raw tasks, ideas, links, or notes below. The agent can help organize them into the backlog. -->
-
-*(Tulis atau tempel daftar tugas/catatan di sini)*
-
----
-
 ## Completed Tasks
 
 - [x] Initial modular C++ structure setup with automated bundler script (scripts/bundle.py)
