@@ -6,40 +6,42 @@ This document describes the architectural layout, rendering pipeline, animation 
 
 ## 1. High-Level Architecture Overview
 
-```
-+------------------------------------------------------------------------+
-|                         Windhawk Mod Engine                            |
-|        (Wh_ModInit, Wh_ModUninit, Wh_ModSettingsChanged hooks)         |
-+------------------------------------+-----------------------------------+
-                                     |
-                                     v
-+------------------------------------------------------------------------+
-|                            Main Coordinator                            |
-|             (Manages lifecycle, timer ticks, settings sync)            |
-+--------------------+-----------------------------------+---------------+
-                     |                                   |
-                     v                                   v
-    +----------------------------------+   +-----------------------------+
-    |         Service Manager          |   |      Island Window          |
-    |  - Priority Queue                |   |  - Layered HWND (WS_POPUP)  |
-    |  - Transient HUD Dispatcher      |   |  - Direct2D Render Target   |
-    |  - Live Activity State Resolver  |   |  - Mouse / Hover Tracker    |
-    +----------------+-----------------+   +--------------+--------------+
-                     |                                    |
-     +---------------+---------------+                    v
-     |                               |           +-----------------------+
-     v                               v           |  Layout Engine        |
-+--------------------+     +------------------+  |  - Taskbar info & DPI |
-|   Live Activities  |     |  Transient HUDs  |  |  - Top embed vs float |
-|  - Media (GSMTC)   |     |  - Volume (MMDev)|  |  - Compact vs Expanded|
-|  - Focus Timer     |     |  - Caps Lock     |  +--------------+--------+
-|  - Microphone      |     |  - Power/Battery |                 |
-+--------------------+     |  - Bluetooth     |                 v
-                           +------------------+  +----------------------------+
-                                                 |      Animation Engine      |
-                                                 |  - Spring Physics          |
-                                                 |  - Cubic-Bezier Evaluator  |
-                                                 +----------------------------+
+```mermaid
+flowchart TD
+    Engine["<b>Windhawk Mod Engine</b><br/>Wh_ModInit, Wh_ModUninit,<br/>Wh_ModSettingsChanged hooks"]
+
+    Coord["<b>Main Coordinator</b><br/>Manages lifecycle, timer ticks,<br/>settings sync"]
+
+    SM["<b>Service Manager</b><br/>- Priority Queue<br/>- Transient HUD Dispatcher<br/>- Live Activity State Resolver"]
+
+    IW["<b>Island Window</b><br/>- Layered HWND (WS_POPUP)<br/>- Direct2D Render Target<br/>- Mouse / Hover Tracker"]
+
+    subgraph LA["Live Activities"]
+        direction TB
+        LA1["Media (GSMTC)"]
+        LA2["Focus Timer"]
+        LA3["Microphone"]
+    end
+
+    subgraph HUD["Transient HUDs"]
+        direction TB
+        H1["Volume (MMDev)"]
+        H2["Caps Lock"]
+        H3["Power/Battery"]
+        H4["Bluetooth"]
+    end
+
+    LE["<b>Layout Engine</b><br/>- Taskbar info & DPI<br/>- Top embed vs float<br/>- Compact vs Expanded"]
+
+    AE["<b>Animation Engine</b><br/>- Spring Physics<br/>- Cubic-Bezier Evaluator"]
+
+    Engine --> Coord
+    Coord --> SM
+    Coord --> IW
+    SM --> LA
+    SM --> HUD
+    IW --> LE
+    LE --> AE
 ```
 
 ---
