@@ -127,10 +127,10 @@ DWORD WINAPI ThumbnailWorkerThreadProc(LPVOID param) {
 
 MediaService::MediaService(ServiceManager* manager)
     : m_manager(manager) {
-    m_state.title = L"Senbonzakura";
-    m_state.artist = L"Kurousa-P feat. Hatsune Miku";
-    m_state.isPlaying = true;
-    m_state.progress = 0.3f;
+    m_state.title.clear();
+    m_state.artist.clear();
+    m_state.isPlaying = false;
+    m_state.progress = 0.0f;
 }
 
 MediaService::~MediaService() {
@@ -139,15 +139,12 @@ MediaService::~MediaService() {
 
 void MediaService::Start() {
     m_isRunning = true;
-    if (m_manager) {
-        m_manager->SetLiveActivity(EventType::Media, true);
-        m_manager->UpdateMediaState(m_state);
-    }
     LogInfo(L"MediaService started");
 }
 
 void MediaService::Stop() {
     m_isRunning = false;
+    m_hasRealSession = false;
     m_lastFetchedTrackId.clear();
     {
         std::lock_guard<std::mutex> lock(m_thumbMutex);
@@ -156,6 +153,10 @@ void MediaService::Stop() {
         m_thumbHeight = 0;
         m_thumbVersion++;
     }
+    m_state.isPlaying = false;
+    m_state.title.clear();
+    m_state.artist.clear();
+    m_state.progress = 0.0f;
     if (m_manager) {
         m_manager->SetLiveActivity(EventType::Media, false);
     }
@@ -249,8 +250,8 @@ void MediaService::Poll() {
                 auto info = session.GetPlaybackInfo();
                 auto timeline = session.GetTimelineProperties();
 
-                std::wstring title = props.Title().c_str();
-                std::wstring artist = props.Artist().c_str();
+                std::wstring title = props ? props.Title().c_str() : L"";
+                std::wstring artist = props ? props.Artist().c_str() : L"";
                 bool isPlaying = (info && info.PlaybackStatus() == winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
 
                 float prog = 0.0f;
@@ -264,6 +265,7 @@ void MediaService::Poll() {
                 }
 
                 if (!title.empty()) {
+                    m_hasRealSession = true;
                     m_state.title = title;
                     m_state.artist = artist;
                     m_state.isPlaying = isPlaying;
@@ -274,15 +276,47 @@ void MediaService::Poll() {
                         m_lastFetchedTrackId = currentTrackId;
                         TriggerAsyncThumbnailFetch(props.Thumbnail(), currentTrackId);
                     }
+                } else {
+                    m_state.isPlaying = false;
                 }
 
                 if (m_manager) {
                     m_manager->UpdateMediaState(m_state);
                 }
                 return;
+            } else {
+                // No session active
+                if (m_hasRealSession || m_state.isPlaying || !m_state.title.empty()) {
+                    m_hasRealSession = false;
+                    m_state.isPlaying = false;
+                    m_state.title.clear();
+                    m_state.artist.clear();
+                    m_state.progress = 0.0f;
+                    m_lastFetchedTrackId.clear();
+                    {
+                        std::lock_guard<std::mutex> lock(m_thumbMutex);
+                        m_thumbPixels.clear();
+                        m_thumbWidth = 0;
+                        m_thumbHeight = 0;
+                        m_thumbVersion++;
+                    }
+                    if (m_manager) {
+                        m_manager->UpdateMediaState(m_state);
+                    }
+                }
+                return;
             }
         }
-    } catch (...) {}
+    } catch (...) {
+        if (m_hasRealSession || m_state.isPlaying) {
+            m_hasRealSession = false;
+            m_state.isPlaying = false;
+            if (m_manager) {
+                m_manager->UpdateMediaState(m_state);
+            }
+        }
+        return;
+    }
 #endif
 
     // Fallback playback progression when no active WinRT session

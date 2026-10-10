@@ -21,6 +21,7 @@ Agents and developers must inspect this document during startup and keep task st
 
 ## Current Focus (Interactive Polish & User Feedback Backlog)
 
+- [x] [P1] Startup Media State & Placeholder Fix: Clean up uninitialized media defaults; prevent `MediaService` from forcing active playback ("Senbonzakura") on boot so island cleanly displays the digital clock in `always_visible` mode or stays hidden in `events_only` mode.
 - [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (island is not clickable on top taskbar due to AppBar / Shell_TrayWnd z-order conflict, while bottom taskbar works properly).
 - [x] [P1] Media Album Art Thumbnail Streaming (Non-Blocking / Asynchronous):
   - [x] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.

@@ -83,15 +83,15 @@ struct MediaThumbnail {
 };
 
 struct MediaState {
-    std::wstring title = L"Senbonzakura";
-    std::wstring artist = L"Kurousa-P feat. Hatsune Miku";
-    float progress = 0.3f;
-    bool isPlaying = true;
+    std::wstring title;
+    std::wstring artist;
+    float progress = 0.0f;
+    bool isPlaying = false;
 };
 
 struct TimerState {
-    int remainingSeconds = 30;
-    int totalSeconds = 30;
+    int remainingSeconds = 0;
+    int totalSeconds = 0;
     bool isPaused = false;
     std::wstring label = L"Fokus";
     std::wstring session = L"Sesi 1 dari 4";
@@ -99,8 +99,8 @@ struct TimerState {
 
 struct MicState {
     std::wstring title = L"Mikrofon lagi dipakai";
-    std::wstring appName = L"Discord";
-    bool isActive = true;
+    std::wstring appName;
+    bool isActive = false;
 };
 
 struct TransientState {

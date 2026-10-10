@@ -187,7 +187,7 @@ void ServiceManager::UpdateTimerState(const TimerState& state) {
 }
 
 void ServiceManager::OnMediaPlayPause() {
-    if (m_mediaService) {
+    if (m_mediaService && m_mediaService->HasRealSession()) {
         if (m_mediaService->GetState().isPlaying) {
             m_mediaService->Pause();
         } else {
@@ -201,7 +201,7 @@ void ServiceManager::OnMediaPlayPause() {
 }
 
 void ServiceManager::OnMediaPrev() {
-    if (m_mediaService) {
+    if (m_mediaService && m_mediaService->HasRealSession()) {
         m_mediaService->Previous();
     }
     if (m_window) {
@@ -211,7 +211,7 @@ void ServiceManager::OnMediaPrev() {
 }
 
 void ServiceManager::OnMediaNext() {
-    if (m_mediaService) {
+    if (m_mediaService && m_mediaService->HasRealSession()) {
         m_mediaService->Next();
     }
     if (m_window) {
@@ -293,11 +293,20 @@ void ServiceManager::TriggerTestScenario(int index) {
     m_hasActiveTransient = false;
 
     switch (m_demoIndex) {
-        case 0:
+        case 0: {
             m_timerActive = false;
             m_micActive = false;
+            MediaState demoMedia;
+            demoMedia.title = L"Senbonzakura";
+            demoMedia.artist = L"Kurousa-P feat. Hatsune Miku";
+            demoMedia.isPlaying = true;
+            demoMedia.progress = 0.3f;
+            if (m_window) {
+                m_window->UpdateMediaState(demoMedia);
+            }
             SetLiveActivity(EventType::Media, true);
             break;
+        }
         case 1:
             m_mediaActive = false;
             m_micActive = false;
@@ -306,11 +315,19 @@ void ServiceManager::TriggerTestScenario(int index) {
             }
             SetLiveActivity(EventType::Timer, true);
             break;
-        case 2:
+        case 2: {
             m_mediaActive = false;
             m_timerActive = false;
+            MicState demoMic;
+            demoMic.title = L"Mikrofon lagi dipakai";
+            demoMic.appName = L"Discord";
+            demoMic.isActive = true;
+            if (m_window) {
+                m_window->UpdateMicState(demoMic);
+            }
             SetLiveActivity(EventType::MicStatus, true);
             break;
+        }
         case 3:
             FireTransient(EventType::Volume);
             break;

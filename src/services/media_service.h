@@ -32,6 +32,7 @@ public:
     void Poll();
 
     const MediaState& GetState() const { return m_state; }
+    bool HasRealSession() const { return m_hasRealSession; }
 
     void Play();
     void Pause();
@@ -46,6 +47,7 @@ private:
     ServiceManager* m_manager = nullptr;
     MediaState m_state;
     bool m_isRunning = false;
+    bool m_hasRealSession = false;
 
     mutable std::mutex m_thumbMutex;
     std::vector<uint8_t> m_thumbPixels;
