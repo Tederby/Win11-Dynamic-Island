@@ -19,31 +19,23 @@ Agents and developers must inspect this document during startup and keep task st
 
 ---
 
-## Current Focus (Interactive Polish & User Feedback Backlog)
+## Current Focus (Dual-Mode Interactive Architecture & Polish)
 
-- [x] [P1] Startup Media State & Placeholder Fix: Clean up uninitialized media defaults; prevent `MediaService` from forcing active playback ("Senbonzakura") on boot so island cleanly displays the digital clock in `always_visible` mode or stays hidden in `events_only` mode.
-- [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (island is not clickable on top taskbar due to AppBar / Shell_TrayWnd z-order conflict, while bottom taskbar works properly).
-- [x] [P1] Media Album Art Thumbnail Streaming (Non-Blocking / Asynchronous):
-  - [x] Stream album art thumbnail retrieval via WinRT `IRandomAccessStreamReference` -> WIC bitmap pipeline.
-  - [x] CRITICAL: Retrieve thumbnail bytes on a dedicated background worker / asynchronous task to NEVER block the UI thread (preventing COM STA `.get()` deadlocks and freezing).
-  - [x] Decode in-memory via `IWICImagingFactory` -> `IWICStream` -> `ID2D1Bitmap` (PBGRA).
-  - [x] Render with distortion-free 1:1 center cover-crop (`object-fit: cover`) via `ID2D1BitmapBrush` in compact (18x18) and expanded (52x52) states, falling back gracefully to dynamic gradient.
-- [x] [P1] Idle State Visual Polish & Centering:
-  - [x] Digital clock (`HH:mm`) centering: fix vertical and horizontal alignment offsets so text sits dead-center within the idle pill.
-  - [x] Idle aesthetics: enrich minimal idle pill with sleek typography and subtle status indicators (e.g. charging accent, audio activity micro-dot, or subtle seconds pulse).
-- [x] [P1] Void Entry Animation (`events_only` mode):
-  - [x] Eliminate abrupt popping: when the island awakens from hidden state (e.g., track starts, Caps Lock toggles, charger plugged), animate entry smoothly using cubic-bezier spring physics from zero scale / opacity (`scale: 0.35 -> 1.0`, `opacity: 0 -> 1.0`).
-- [x] [P1] Same-Size Event Transition & Content Crossfade / Morphing:
-  - [x] When switching between two events that share identical or similar dimensions (e.g. CapsLock to Volume, or successive transient HUDs), implement smooth content crossfade / alpha blending instead of snapping directly to new text/icons.
-  - [x] Add subtle physical micro-pulse/punch (`scale: 1.0 -> 1.035 -> 1.0`) during same-size event changes to provide tactile visual feedback.
-- [x] [P1] Continuous Looping Running Text (Marquee) & Acceleration Glitch Fix:
-  - [x] Continuous Wrapping Loop: Replace ping-pong / hard reset with seamless infinite scrolling (duplicate title/artist string with separator bullet so the tail seamlessly loops back into view).
-  - [x] Acceleration Fix: Drive marquee scrolling strictly by high-precision QPC delta elapsed time (`deltaTimeSeconds * SPEED_PX_PER_SEC`) instead of timer tick counts to eliminate the speed-up glitch when concurrent background events fire.
-  - [x] Smooth 60 FPS Framerate & Readable Speed: Increased marquee refresh timer to 16ms (~60 FPS) and tuned scrolling speed to 16 px/s with hardware DirectWrite layout caching to eliminate stutter and choppiness.
-- [x] [P1] Remove Test Right-Click Interaction:
-  - [x] Remove legacy right-click scenario cycling handler (`WM_RBUTTONUP` / `OnRightClick()`) left over from early prototype testing. Retain global hotkeys (`Ctrl+Win+1..9, 0`).
-- [x] [P1] Left-Click State Machine Refinement:
-  - [x] Fix premature auto-collapse bouncing: clicking to expand should reliably lock the island open without immediately bouncing back to compact state (protected `IslandState::Expanded` against periodic `ServiceManager` polling overrides).
+- [ ] [P0] Media Pause Solid-Black Bugfix:
+  - Prevent island from dropping live activity and turning solid black when paused while expanded.
+  - Preserve expanded media layout during pause state with seamless toggle of the play/pause button icon (showing Play icon instead of Pause) and freezing marquee/waveform.
+- [ ] [P1] Media Progress Bar Removal & Layout Rebalance:
+  - Remove buggy media timeline progress bar completely from expanded media rendering.
+  - Rebalance vertical spacing and control button hit-test areas below track title and artist.
+- [ ] [P1] Idle Click-to-Expand (Clock & Date View):
+  - Enable compact idle pill click event to expand island into a rich Time and Date view (large clock, day of week, full date).
+- [ ] [P1] Two-Tier Physical Interaction Architecture (Collapsed vs Expanded) with Mouse Wheel Scrolling:
+  - **Collapsed Mode (Compact Pill):** Implement `WM_MOUSEWHEEL` handling to cycle active compact widgets (e.g., Clock & Weather -> Hardware Monitoring -> etc.).
+  - **Expanded Mode (Multi-Page Island):** Implement `WM_MOUSEWHEEL` handling to smoothly switch between expanded pages (Page 1: Time & Date Summary; Page 2: Weather & Calendar; etc.).
+  - **Non-blocking Media Navigation:** When media is active and expanded, allow mouse wheel scrolling to inspect other pages (Time/Date, Weather) rather than locking the user exclusively into the media view.
+- [ ] [P2] Idle Weather Integration & Windhawk Formatting Settings:
+  - Integrate lightweight weather service fetching current temperature (location-based auto detection or manual setting).
+  - Add Windhawk mod settings for Temperature Unit (Celsius vs Fahrenheit) and Clock Format (12-Hour AM/PM vs 24-Hour).
 
 ---
 
@@ -56,24 +48,30 @@ Agents and developers must inspect this document during startup and keep task st
 - [x] [P1] Always-visible idle content: Minimal digital clock (HH:mm)
 - [x] [P1] Idle Pill Visual Enhancement: Precisely center digital clock typography vertically and horizontally; enrich idle pill with sleek aesthetics and subtle status indicator dots
 - [x] [P1] Void Entry Animation (`events_only` mode): Organic spring scale-up and opacity fade-in transition when island awakens from hidden state instead of abruptly popping in
-- [x] [P1] Same-Size Event Transition & Crossfade: Implement smooth content crossfade/morph when transitioning between events of identical size (e.g. CapsLock to Volume) so content doesn't snap abruptly
+- [x] [P1] Same-Size Event Transition & Crossfade: Implement smooth content crossfade/morph when transitioning between events of identical size (e.g. CapsLock to Volume)
 - [x] [P1] Continuous Looping Marquee: Convert title/artist marquee to seamless continuous wrapping loop and fix acceleration glitch caused by concurrent background event ticks
 - [x] [P0] DirectWrite trimming: prevent vertical text wrapping with ellipsis (...) truncation
 - [x] [P0] Decouple HWND resizing and ID2D1HwndRenderTarget::Resize from 16ms animation ticks
 - [x] [P1] Symmetrical vertical waveform bars: render via FillRoundedRectangle expanding from centerY
 - [x] [P1] Waveform paused state: render clean static dots via FillEllipse instead of flat lines
-- [ ] [P1] Reconcile vector element spacing and control positions with settled layouts
+- [ ] [P1] Reconcile vector element spacing and control positions after removing media progress bar
+- [ ] [P1] Expanded Idle Page Rendering: Render high-aesthetic Time, Day, and Date typography on Page 1
+- [ ] [P1] Expanded Weather Page Rendering: Render weather temperature, conditions icon, and forecast snippet
+- [ ] [P1] Page Transition Animation: Implement smooth horizontal slide or fade transition between expanded pages
 - [ ] [P2] Button hover, pressed, and active feedback states for media and timer controls
 - [ ] [P2] High-DPI scaling validation across 100%, 125%, 150%, and 200% display scaling factors
 
 ### 2. Interaction, Hit-Testing and Input Handling
-- [x] [P0] Event Preemption & Interruption: Superseding events (e.g. Caps Lock On -> Off, Volume changes) immediately replace active HUD without queue delay
+- [x] [P0] Event Preemption & Interruption: Superseding events immediately replace active HUD without queue delay
 - [x] [P0] Overhaul hit-test coordinate mapping (use settled target layout metrics instead of interpolating width)
 - [x] [P0] Implement robust WM_LBUTTONDOWN / WM_LBUTTONUP state machine with SetCapture / ReleaseCapture
 - [x] [P0] Fix premature collapse: clicking content body or dragging must not dismiss the island
-- [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar (resolve AppBar / window z-order conflict while bottom taskbar works)
-- [x] [P1] Left-Click Interaction Refinement: Fix premature auto-collapse bounce after clicking to expand; implement press-and-hold (long-press) interaction support
+- [x] [P0] Top Taskbar Island Hit-Test & Clickability: Resolve click event interception when island is docked on top taskbar
+- [x] [P1] Left-Click Interaction Refinement: Fix premature auto-collapse bounce after clicking to expand; implement press-and-hold interaction support
 - [x] [P1] Support compact island click-to-expand across all valid event states
+- [ ] [P1] Enable compact island click-to-expand during idle state (EventType::None)
+- [ ] [P1] Mouse wheel scrolling support (`WM_MOUSEWHEEL`) in Collapsed state to cycle compact modules
+- [ ] [P1] Mouse wheel scrolling support (`WM_MOUSEWHEEL`) in Expanded state to cycle full widget pages
 - [x] [P1] Global test hotkeys (Ctrl + Win + 1..9, 0) for manual HUD and scenario simulation
 - [x] [P1] Remove test right-click scenario cycling (deprecated prototype leftover in WM_RBUTTONUP)
 
@@ -84,25 +82,23 @@ Agents and developers must inspect this document during startup and keep task st
   - [x] Real transport controls (Play, Pause, Skip Next, Skip Previous)
   - [x] Stream album art thumbnail retrieval via IRandomAccessStreamReference
   - [x] Smooth marquee / running text for overflowing title/artist
-  - [x] Adaptive taskbar line layout (1-line on compact taskbar, 2-line on normal taskbar)
-- [x] [P1] Album Art 1:1 Square Cropping:
-  - [x] Aspect ratio calculation and center-crop algorithm for rectangular art
-  - [x] Distortion-free squircle rendering in compact (18x18) and expanded (48x48) states
+  - [x] Adaptive taskbar line layout
+  - [-] Media timeline progress bar (removed due to platform desync bugs)
+- [x] [P1] Album Art 1:1 Square Cropping: Aspect ratio calculation and center-crop squircle rendering
 - [/] [P1] Waveform Visualizer & Audio Loopback Engine:
-  - [x] WASAPI audio loopback capture (AUDCLNT_STREAMFLAGS_LOOPBACK on default eRender/eConsole endpoint)
-  - [x] Power efficiency gating: capture only runs when media is playing (playing == true) and media UI is visible
+  - [x] WASAPI audio loopback capture on default endpoint
+  - [x] Power efficiency gating: capture only runs when media is playing and UI is visible
   - [ ] Stall watchdog: auto-reconnect WASAPI client if media reports playing but stream receives no data > 5s
-  - [x] RMS signal calculation: per-chunk (64 frames) RMS = sqrt(sum(v^2)/N) * 4.0f, clamped to [0.0, 1.0]
-  - [x] Attack / Release envelope filter: fast attack 0.7 (punchy beats) and soft release 0.85 (smooth decay)
+  - [x] RMS signal calculation and attack/release envelope filter
   - [ ] Enhance visualizer dynamics and responsiveness
-- [x] [P1] Microphone Privacy Event:
-  - [x] Transition detection (app starts using microphone) via Registry / CoreAudio capture streams
-  - [x] Display as transient pop-up HUD (2.8s timeout) with app name and orange privacy dot
-  - [x] Automatic restoration of underlying media or idle state upon expiry (never locked in always-visible)
+- [x] [P1] Microphone Privacy Event: Transition detection via Registry / CoreAudio capture streams with orange dot
+- [x] [P1] Keyboard: Real Caps Lock state toggle monitoring via GetKeyState polling and HUD badge
+- [ ] [P2] Keyboard: Num Lock state toggle HUD support
+- [x] [P1] Power / Battery: Real AC plug/unplug and low battery (<20%) alert HUD via GetSystemPowerStatus polling
+- [ ] [P3] Power / Battery: Event-driven refactor using RegisterPowerSettingNotification
 - [ ] [P1] Audio / Volume: Real MMDevice endpoint volume monitoring via IAudioEndpointVolumeCallback
-- [ ] [P2] Power / Battery: Real AC plug/unplug and charge percentage events via RegisterPowerSettingNotification
-- [ ] [P2] Keyboard: Real Caps Lock and Num Lock state toggles via raw input / LL hook
 - [ ] [P2] Bluetooth: Battery and connection state parsing for connected peripherals
+- [ ] [P2] Weather Service: Fetch local temperature via Windows Location API or manual query
 
 ### 4. Shell Geometry and Taskbar Adaptation
 - [x] [P1] Handle WM_SETTINGCHANGE, WM_DISPLAYCHANGE, WM_DPICHANGED, and TaskbarCreated in IslandWindow
@@ -113,8 +109,11 @@ Agents and developers must inspect this document during startup and keep task st
 ### 5. Visibility Policies and Configuration
 - [x] [P1] Implement idleVisibilityMode setting (always_visible vs events_only)
 - [x] [P1] Implement mediaVisibilityPolicy setting (always_visible vs track_change_only)
+- [x] [P1] Implement auto-collapse delay setting (`autoCollapseDelayMs` / `autoCollapseSeconds`) and pause-on-hover logic
 - [x] [P1] Synchronize src/metadata/mod_settings.h schema with runtime LoadSettings() in main.cpp
-- [ ] [P2] Auto-collapse timer setting (autoCollapseSeconds) and pause-on-hover logic
+- [ ] [P2] Add temperature unit setting (`celsius` vs `fahrenheit`)
+- [ ] [P2] Add clock display format setting (`24h` vs `12h`)
+- [ ] [P2] Add weather location configuration settings (`auto` vs `manual` city/coordinates)
 
 ### 6. Stability, Performance and Verification
 - [x] [P0] Establish Windhawk compilation guide and automated dual-target verification (scripts/verify.py, docs/COMPILER_GUIDE.md)
@@ -134,3 +133,12 @@ Agents and developers must inspect this document during startup and keep task st
 - [x] Implement global debug hotkeys (Ctrl+Win+1..9, 0) and enhanced demo scenario cycling
 - [x] Implement real-time taskbar movement and display adaptation (WM_SETTINGCHANGE, WM_DISPLAYCHANGE, WM_DPICHANGED, TaskbarCreated, and geometry polling)
 - [x] Implement idleVisibilityMode and mediaVisibilityPolicy configuration settings with runtime schema synchronization
+- [x] Implement auto-collapse delay timer with pause-on-hover logic
+- [x] Implement real Caps Lock state change HUD
+- [x] Implement real AC power connect/disconnect and low battery alerts
+- [x] Top taskbar z-order and clickability fix
+- [x] Startup media placeholder clean boot fix
+- [x] Asynchronous album art streaming and PBGRA decoding
+- [x] Continuous infinite-loop marquee with QPC delta timing
+- [x] Void entry spring physics for events-only mode
+- [x] Same-size HUD content crossfade transition
